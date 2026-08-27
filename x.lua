@@ -1,11 +1,3 @@
---[[
-                          Neverlose.cc UI Library
-    Author: 4lpaca
-	License: MIT
-    Discord: https://arceney.win/discord
-    Other-Projects: https://4lpaca.win
-]]
-
 do
 	local Constant = 'L'..'P'..'H'..'_NO_VIRTUALIZE';
 	getfenv()[Constant] = getfenv()[Constant] or function(f) return f end;
@@ -169,10 +161,10 @@ local Mouse: Mouse = LocalPlayer:GetMouse();
 local CurrentCamera: Camera = cloneref(workspace.CurrentCamera);
 local ProtectGui = protect_gui or protectgui or (syn and syn.protect_gui) or function(s) return s; end;
 local GlobalWindow = Instance.new('ScreenGui');
-local ManualTween = TweenInfo.new(0.1);
-local SlowyTween = TweenInfo.new(0.175);
-local FastTween = TweenInfo.new(0.05);
-local VSlowTween = TweenInfo.new(0.5,Enum.EasingStyle.Quint);
+local ManualTween = TweenInfo.new(0.12, Enum.EasingStyle.Quart, Enum.EasingDirection.Out);
+local SlowyTween = TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out);
+local FastTween = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+local VSlowTween = TweenInfo.new(0.42, Enum.EasingStyle.Quint, Enum.EasingDirection.Out);
 local Encryption = {};
 
 NeverLose.UserProfile = Players:GetUserThumbnailAsync(LocalPlayer.UserId , Enum.ThumbnailType.HeadShot , Enum.ThumbnailSize.Size150x150)
@@ -195,25 +187,63 @@ NeverLose.Scales = {
 	Large = UDim2.fromOffset(800 , 600)
 };
 
-NeverLose.IconColor = Color3.fromRGB(255, 255, 255);
+-- Smoked-glass palette. Keeping these values centralized makes every surface
+-- feel related and avoids the slightly different near-black colors the old UI used.
+NeverLose.Theme = {
+	Base = Color3.fromRGB(8, 12, 20),
+	Panel = Color3.fromRGB(14, 20, 31),
+	Elevated = Color3.fromRGB(20, 28, 42),
+	Control = Color3.fromRGB(27, 37, 54),
+	Hover = Color3.fromRGB(35, 48, 68),
+	Active = Color3.fromRGB(42, 59, 82),
+	Track = Color3.fromRGB(11, 16, 26),
+	Border = Color3.fromRGB(104, 128, 160),
+	Text = Color3.fromRGB(241, 246, 255),
+	Muted = Color3.fromRGB(157, 171, 194),
+	Accent = Color3.fromRGB(91, 177, 255),
+	AccentSoft = Color3.fromRGB(142, 116, 255),
+};
+
+NeverLose.IconColor = NeverLose.Theme.Text;
 NeverLose.ScreenGui = GlobalWindow;
 NeverLose.Flags = {};
-NeverLose.AccentColor = Color3.fromRGB(0, 98, 255);
+NeverLose.AccentColor = NeverLose.Theme.Accent;
 function NeverLose:SetAccentColor(color)
-	NeverLose.AccentColor = color;
+	local PreviousAccent = NeverLose.AccentColor;
 
 	for _, obj in next, NeverLose.ScreenGui:GetDescendants() do
-		if obj:IsA("TextLabel") and obj.TextColor3 == NeverLose.AccentColor then
+		if (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) and obj.TextColor3 == PreviousAccent then
 			obj.TextColor3 = color;
 		end;
-		if obj:IsA("Frame") and obj.BackgroundColor3 == NeverLose.AccentColor then
+		if (obj:IsA("Frame") or obj:IsA("ImageLabel") or obj:IsA("ImageButton")) and obj.BackgroundColor3 == PreviousAccent then
 			obj.BackgroundColor3 = color;
+		end;
+		if obj:IsA("UIStroke") and obj.Color == PreviousAccent then
+			obj.Color = color;
+		end;
+		if obj:IsA("UIGradient") then
+			local Keypoints = obj.Color.Keypoints;
+			local Changed = false;
+			local Updated = {};
+			for _, Keypoint in next, Keypoints do
+				local KeypointColor = Keypoint.Value;
+				if KeypointColor == PreviousAccent then
+					KeypointColor = color;
+					Changed = true;
+				end;
+				table.insert(Updated, ColorSequenceKeypoint.new(Keypoint.Time, KeypointColor));
+			end;
+			if Changed then
+				obj.Color = ColorSequence.new(Updated);
+			end;
 		end;
 	end;
 
 	NeverLose.AccentColor = color;
+	NeverLose.Theme.Accent = color;
+	NeverLose.MainColor = color;
 end;
-NeverLose.MainColor = Color3.fromRGB(0, 98, 255);
+NeverLose.MainColor = NeverLose.Theme.Accent;
 NeverLose.RegisiteryColor = {};
 NeverLose.NameRegisitry = {};
 NeverLose.IsMosueOverOtherFrame = false;
@@ -221,7 +251,7 @@ NeverLose.GlobalLogo = "rbxassetid://115922855794150";
 NeverLose.ImageColorMapping = "rbxassetid://4155801252";
 
 if getcustomasset then
-	local link = "https://github.com/DeviceHB21/mylib/blob/main/assets/%s?raw=true";
+	local link = "https://github.com/zzvsvv/skrypciory/blob/main/%s?raw=true";
 	local dir = 'NLAssets';
 
 	if not isfolder(dir) then
@@ -931,12 +961,40 @@ NeverLose.CreateInput = LPH_NO_VIRTUALIZE(function(self , Frame , Callback)
 end);
 
 NeverLose.PlayAnimate = LPH_NO_VIRTUALIZE(function(Self , Info , Property)
-	local Tween = TweenService:Create(Self , Info or TweenInfo.new(0.25) , Property);
+	NeverLose.ActiveTweens = NeverLose.ActiveTweens or setmetatable({}, { __mode = "k" });
 
+	local PreviousTween = NeverLose.ActiveTweens[Self];
+	if PreviousTween then
+		PreviousTween:Cancel();
+	end;
+
+	local Tween = TweenService:Create(Self , Info or TweenInfo.new(0.25) , Property);
+	NeverLose.ActiveTweens[Self] = Tween;
+
+	local CompletionConnection;
+	CompletionConnection = Tween.Completed:Connect(function()
+		if NeverLose.ActiveTweens[Self] == Tween then
+			NeverLose.ActiveTweens[Self] = nil;
+		end;
+		CompletionConnection:Disconnect();
+	end);
 	Tween:Play();
 
 	return Tween;
 end);
+
+function NeverLose:AddGlassGradient(parent, rotation)
+	local Gradient = Instance.new("UIGradient");
+	Gradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(0.48, Color3.fromRGB(220, 235, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(188, 205, 238)),
+	});
+	Gradient.Rotation = rotation or 115;
+	Gradient.Parent = parent;
+
+	return Gradient;
+end;
 
 NeverLose.Drag = LPH_NO_VIRTUALIZE(function(InputFrame: Frame, MoveFrame: Frame, Speed : number)
 	local dragToggle: boolean = false;
@@ -1005,7 +1063,7 @@ NeverLose.ProcessParams = LPH_NO_VIRTUALIZE(function(self , Params , Fixed)
 	return k;
 end);
 
-NeverLose.EnabledBlur = false;
+NeverLose.EnabledBlur = true;
 NeverLose.BlurModuleParent = workspace.CurrentCamera;
 
 NeverLose.GetCalculatePosition = LPH_NO_VIRTUALIZE(function(planePos, planeNormal, rayOrigin, rayDirection)
@@ -1032,13 +1090,13 @@ NeverLose.CreateBlurModule = LPH_NO_VIRTUALIZE(function(self , Frame , Signal)
 	BlockMesh.Parent = Part;
 
 	Part.Material = Enum.Material.Glass;
-	Part.Transparency = 1;
-	Part.Reflectance = 1;
+	Part.Transparency = 0.985;
+	Part.Reflectance = 0;
 	Part.CastShadow = false;
 	Part.Anchored = true;
 	Part.CanCollide = false;
 	Part.CanQuery = false;
-	Part.CollisionGroup = NeverLose.RandomString();
+	Part.CanTouch = false;
 	Part.Size = Vector3.new(1, 1, 1) * 0.01;
 	Part.Color = Color3.fromRGB(0,0,0);
 
@@ -1046,44 +1104,17 @@ NeverLose.CreateBlurModule = LPH_NO_VIRTUALIZE(function(self , Frame , Signal)
 	DepthOfField.FarIntensity = 0;
 	DepthOfField.FocusDistance = 0;
 	DepthOfField.InFocusRadius = 1000;
-	DepthOfField.NearIntensity = 1;
+	DepthOfField.NearIntensity = 0;
 	DepthOfField.Name = NeverLose.RandomString();
 
 	Part.Name = NeverLose.RandomString();
 
 	local disconnect;
+	local renderConnection;
+	local active = false;
 
 	local UpdateFunction = function()
-		local IsWindowActive = Signal:GetValue();
-
-		if IsWindowActive and not NeverLose.Global3DRenderMode then
-
-			NeverLose.PlayAnimate(DepthOfField,TweenInfo.new(0.1),{
-				NearIntensity = 1
-			})
-
-			NeverLose.PlayAnimate(Part,TweenInfo.new(0.1),{
-				Transparency = 0.97,
-				Size = Vector3.new(1, 1, 1) * 0.01;
-			})
-
-			Part.Parent = NeverLose.BlurModuleParent;
-		else
-			NeverLose.PlayAnimate(DepthOfField,TweenInfo.new(0.1),{
-				NearIntensity = 0
-			})
-
-			NeverLose.PlayAnimate(Part,TweenInfo.new(0.1),{
-				Size = Vector3.zero,
-				Transparency = 1.5,
-			})
-
-			Part.Parent = nil;
-
-			return false;
-		end;
-
-		if IsWindowActive then
+		if active and CurrentCamera then
 			local corner0 = Frame.AbsolutePosition;
 			local corner1 = corner0 + Frame.AbsoluteSize;
 
@@ -1109,30 +1140,42 @@ NeverLose.CreateBlurModule = LPH_NO_VIRTUALIZE(function(self , Frame , Signal)
 		end;
 	end;
 
-	local rbxsignal = NeverLose:AddSignal(CurrentCamera:GetPropertyChangedSignal('CFrame'):Connect(UpdateFunction))
-	local loopThread = NeverLose:AddSignal(UserInputService.InputChanged:Connect(function(Input)
-		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch then
-			pcall(UpdateFunction);
-		end;
-	end));
+	local SetActive = function(value)
+		active = value and not NeverLose.Global3DRenderMode;
 
-	local THREAD = task.spawn(function()
-		while true do task.wait(0.1)
-			pcall(UpdateFunction);
+		if renderConnection then
+			renderConnection:Disconnect();
+			renderConnection = nil;
 		end;
-	end);
+
+		if active then
+			Part.Parent = NeverLose.BlurModuleParent;
+			NeverLose.PlayAnimate(DepthOfField, SlowyTween, { NearIntensity = 0.38 });
+			NeverLose.PlayAnimate(Part, SlowyTween, { Transparency = 0.985 });
+			UpdateFunction();
+			renderConnection = RunService.RenderStepped:Connect(UpdateFunction);
+		else
+			NeverLose.PlayAnimate(DepthOfField, SlowyTween, { NearIntensity = 0 });
+			NeverLose.PlayAnimate(Part, SlowyTween, { Transparency = 1 });
+			Part.Parent = nil;
+		end;
+	end;
+
+	local signalConnection = NeverLose:AddSignal(Signal:Connect(SetActive));
+	SetActive(Signal:GetValue());
 
 	disconnect = function()
-		rbxsignal:Disconnect();
-		loopThread:Disconnect();
-		task.cancel(THREAD);
+		if renderConnection then
+			renderConnection:Disconnect();
+		end;
+		signalConnection:Disconnect();
 		Part:Destroy();
 		DepthOfField:Destroy();
 	end;
 
-	Frame.Destroying:Connect(disconnect);
+	NeverLose:AddSignal(Frame.Destroying:Connect(disconnect));
 
-	return rbxsignal;
+	return signalConnection;
 end);
 
 local EmptyFunction = function() end;
@@ -1140,7 +1183,12 @@ local EmptyFunction = function() end;
 function NeverLose:RollingEffect(parent)
 	local UIGradient = Instance.new("UIGradient")
 
-	UIGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.4), NumberSequenceKeypoint.new(1.00, 0.00)}
+	UIGradient.Transparency = NumberSequence.new{
+		NumberSequenceKeypoint.new(0.00, 0.85),
+		NumberSequenceKeypoint.new(0.35, 0.15),
+		NumberSequenceKeypoint.new(0.65, 0.45),
+		NumberSequenceKeypoint.new(1.00, 0.85),
+	}
 	UIGradient.Parent = parent
 
 	return UIGradient;
@@ -1149,98 +1197,49 @@ end;
 function NeverLose:CreateShadow(parent , RollingEffect)
 	local Shadow = {};
 
-	local UIShadowSafe85 = Instance.new("UIStroke")
-	local UIShadowSafe65 = Instance.new("UIStroke")
-	local UIShadowSafe50 = Instance.new("UIStroke")
-	local UIShadowSafe45 = Instance.new("UIStroke")
+	local OuterShadow = Instance.new("UIStroke")
+	local RimLight = Instance.new("UIStroke")
 
-	UIShadowSafe85.Thickness = 6.000
-	UIShadowSafe85.Transparency = 1
-	UIShadowSafe85.Parent = parent
+	OuterShadow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+	OuterShadow.Color = Color3.fromRGB(0, 4, 12);
+	OuterShadow.Thickness = 8;
+	OuterShadow.Transparency = 1;
+	OuterShadow.Parent = parent;
 
-	UIShadowSafe65.Thickness = 5.000
-	UIShadowSafe65.Transparency = 1
-	UIShadowSafe65.Parent = parent
+	RimLight.ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+	RimLight.Color = NeverLose.Theme.Border;
+	RimLight.Thickness = 2;
+	RimLight.Transparency = 1;
+	RimLight.Parent = parent;
 
-	UIShadowSafe50.Thickness = 4.000
-	UIShadowSafe50.Transparency = 1
-	UIShadowSafe50.Parent = parent
-
-	UIShadowSafe45.Thickness = 3.000
-	UIShadowSafe45.Transparency = 1
-	UIShadowSafe45.Parent = parent
-
-	local RollingEffectThread;
-	local r1,r2,r3,r4;
-
+	local RollingGradient;
+	local RollingTween;
 	if RollingEffect then
-		r1 = NeverLose:RollingEffect(UIShadowSafe85);
-		r2 = NeverLose:RollingEffect(UIShadowSafe65);
-		r3 = NeverLose:RollingEffect(UIShadowSafe50);
-		r4 = NeverLose:RollingEffect(UIShadowSafe45);
+		RollingGradient = NeverLose:RollingEffect(RimLight);
 	end;
 
 	Shadow.Render = LPH_NO_VIRTUALIZE(function(self , value)
-		if RollingEffectThread then
-			task.cancel(RollingEffectThread);
-			RollingEffectThread = nil;
-		end;
-
 		if value then
-			NeverLose.PlayAnimate(UIShadowSafe85 , SlowyTween , {
-				Transparency = 0.900
-			})
+			NeverLose.PlayAnimate(OuterShadow, SlowyTween, { Transparency = 0.82 });
+			NeverLose.PlayAnimate(RimLight, SlowyTween, { Transparency = 0.58 });
 
-			NeverLose.PlayAnimate(UIShadowSafe65 , SlowyTween , {
-				Transparency = 0.900
-			})
-
-			NeverLose.PlayAnimate(UIShadowSafe50 , SlowyTween , {
-				Transparency = 0.900
-			})
-
-			NeverLose.PlayAnimate(UIShadowSafe45 , SlowyTween , {
-				Transparency = 0.900
-			})
-
-			if RollingEffect then
-				RollingEffectThread = task.spawn(function()
-					local level = 20;
-					while true do task.wait(0.025)
-						NeverLose.PlayAnimate(r1 , SlowyTween , {
-							Rotation = r1.Rotation + level
-						});
-
-						NeverLose.PlayAnimate(r2 , SlowyTween , {
-							Rotation = r2.Rotation + level
-						});
-
-						NeverLose.PlayAnimate(r3 , SlowyTween , {
-							Rotation = r3.Rotation + level
-						});
-
-						NeverLose.PlayAnimate(r4 , SlowyTween , {
-							Rotation = r4.Rotation + level
-						});
-					end;
-				end);
+			if RollingGradient and not RollingTween then
+				RollingGradient.Rotation = 0;
+				RollingTween = TweenService:Create(
+					RollingGradient,
+					TweenInfo.new(7, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
+					{ Rotation = 360 }
+				);
+				RollingTween:Play();
 			end;
 		else
-			NeverLose.PlayAnimate(UIShadowSafe85 , SlowyTween , {
-				Transparency = 1
-			})
+			NeverLose.PlayAnimate(OuterShadow, SlowyTween, { Transparency = 1 });
+			NeverLose.PlayAnimate(RimLight, SlowyTween, { Transparency = 1 });
 
-			NeverLose.PlayAnimate(UIShadowSafe65 , SlowyTween , {
-				Transparency = 1
-			})
-
-			NeverLose.PlayAnimate(UIShadowSafe50 , SlowyTween , {
-				Transparency = 1
-			})
-
-			NeverLose.PlayAnimate(UIShadowSafe45 , SlowyTween , {
-				Transparency = 1
-			})
+			if RollingTween then
+				RollingTween:Cancel();
+				RollingTween = nil;
+			end;
 		end;
 	end);
 
@@ -1263,7 +1262,7 @@ function NeverLose:CreateOptionWindow(Frame: Frame , Zindex)
 	OptionHandler.Name = NeverLose.RandomString();
 	OptionHandler.Parent = NeverLose.ScreenGui
 	OptionHandler.AnchorPoint = Vector2.new(0, 0)
-	OptionHandler.BackgroundColor3 = Color3.fromRGB(23, 23, 25)
+	OptionHandler.BackgroundColor3 = NeverLose.Theme.Panel
 	OptionHandler.BackgroundTransparency = 0
 	OptionHandler.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	OptionHandler.BorderSizePixel = 0
@@ -1272,15 +1271,16 @@ function NeverLose:CreateOptionWindow(Frame: Frame , Zindex)
 	OptionHandler.Size = UDim2.new(0, 220, 0, 75)
 	OptionHandler.ZIndex = Zindex + 9
 
-	UICorner.CornerRadius = UDim.new(0, 10)
+	UICorner.CornerRadius = UDim.new(0, 14)
 	UICorner.Parent = OptionHandler
+	NeverLose:AddGlassGradient(OptionHandler, 120);
 
 	UIListLayout.Parent = OptionHandler
 	UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
 	UIStroke.Transparency = 0.650
-	UIStroke.Color = Color3.fromRGB(45, 48, 58)
+	UIStroke.Color = NeverLose.Theme.Border
 	UIStroke.Parent = OptionHandler
 
 	NeverLose:AddSignal(UIListLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(LPH_NO_VIRTUALIZE(function()
@@ -1327,7 +1327,7 @@ function NeverLose:CreateOptionWindow(Frame: Frame , Zindex)
 			SetPosition();
 
 			NeverLose.PlayAnimate(OptionHandler , SlowyTween , {
-				BackgroundTransparency = 0.035
+				BackgroundTransparency = 0.08
 			})
 
 			NeverLose.PlayAnimate(UIStroke , SlowyTween , {
@@ -1398,7 +1398,7 @@ function NeverLose:CreateColorPicker(HandleFrame: Frame)
 	ColorPickerHandler.Name = NeverLose.RandomString();
 	ColorPickerHandler.Parent = NeverLose.ScreenGui
 	ColorPickerHandler.AnchorPoint = Vector2.new(0, 0)
-	ColorPickerHandler.BackgroundColor3 = Color3.fromRGB(23, 23, 25)
+	ColorPickerHandler.BackgroundColor3 = NeverLose.Theme.Panel
 	ColorPickerHandler.BackgroundTransparency = 0
 	ColorPickerHandler.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	ColorPickerHandler.BorderSizePixel = 0
@@ -1422,11 +1422,12 @@ function NeverLose:CreateColorPicker(HandleFrame: Frame)
 		end;
 	end)));
 
-	UICorner.CornerRadius = UDim.new(0, 10)
+	UICorner.CornerRadius = UDim.new(0, 14)
 	UICorner.Parent = ColorPickerHandler
+	NeverLose:AddGlassGradient(ColorPickerHandler, 120);
 
 	UIStroke.Transparency = 0.650
-	UIStroke.Color = Color3.fromRGB(45, 48, 58)
+	UIStroke.Color = NeverLose.Theme.Border
 	UIStroke.Parent = ColorPickerHandler
 
 	SaViMap.Name = NeverLose.RandomString();
@@ -1440,7 +1441,7 @@ function NeverLose:CreateColorPicker(HandleFrame: Frame)
 	SaViMap.ZIndex = ZIndex + 126
 	SaViMap.Image = NeverLose.ImageColorMapping -- UNSAFE IMAGE
 
-	UICorner_2.CornerRadius = UDim.new(0, 5)
+	UICorner_2.CornerRadius = UDim.new(0, 14)
 	UICorner_2.Parent = SaViMap
 
 	ColorZoneSelection.Name = NeverLose.RandomString();
@@ -1496,7 +1497,7 @@ function NeverLose:CreateColorPicker(HandleFrame: Frame)
 
 	RGBLabel.Name = NeverLose.RandomString();
 	RGBLabel.Parent = ColorPickerHandler
-	RGBLabel.BackgroundColor3 = Color3.fromRGB(26, 28, 36)
+	RGBLabel.BackgroundColor3 = NeverLose.Theme.Control
 	RGBLabel.BackgroundTransparency = 0.750
 	RGBLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	RGBLabel.BorderSizePixel = 0
@@ -1505,12 +1506,12 @@ function NeverLose:CreateColorPicker(HandleFrame: Frame)
 	RGBLabel.ZIndex = ZIndex + 127
 	RGBLabel.Font = Enum.Font.GothamBold
 	RGBLabel.Text = "#FFFFFF"
-	RGBLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	RGBLabel.TextColor3 = NeverLose.Theme.Text
 	RGBLabel.TextSize = 12.000
 	RGBLabel.TextTransparency = 0.400
 	RGBLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-	UICorner_6.CornerRadius = UDim.new(0, 4)
+	UICorner_6.CornerRadius = UDim.new(0, 8)
 	UICorner_6.Parent = RGBLabel
 
 	ColorPickerLib.SetRender = LPH_NO_VIRTUALIZE(function(value)
@@ -1518,7 +1519,7 @@ function NeverLose:CreateColorPicker(HandleFrame: Frame)
 			ColorPickerHandler.Position = UDim2.new(0,HandleFrame.AbsolutePosition.X + 20 , 0 ,HandleFrame.AbsolutePosition.Y + 75);
 
 			NeverLose.PlayAnimate(ColorPickerHandler,SlowyTween , {
-				BackgroundTransparency = 0.035
+				BackgroundTransparency = 0.08
 			})
 
 			NeverLose.PlayAnimate(UIStroke,SlowyTween , {
@@ -1754,7 +1755,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 		Toggle.Name = NeverLose.RandomString();
 		Toggle.Parent = Handler
-		Toggle.BackgroundColor3 = Color3.fromRGB(10, 13, 21)
+		Toggle.BackgroundColor3 = NeverLose.Theme.Track
 		Toggle.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Toggle.BorderSizePixel = 0
 		Toggle.ClipsDescendants = true
@@ -1798,7 +1799,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			else
 				NeverLose.PlayAnimate(Toggle,SlowyTween,{
 					BackgroundTransparency = 0,
-					BackgroundColor3 = Color3.fromRGB(10, 13, 21)
+					BackgroundColor3 = NeverLose.Theme.Track
 				})
 
 				NeverLose.PlayAnimate(Circle,SlowyTween,{
@@ -1815,7 +1816,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			else
 				NeverLose.PlayAnimate(Toggle,SlowyTween,{
 					BackgroundTransparency = 1,
-					BackgroundColor3 = Color3.fromRGB(10, 13, 21)
+					BackgroundColor3 = NeverLose.Theme.Track
 				})
 
 				NeverLose.PlayAnimate(Circle,SlowyTween,{
@@ -1916,7 +1917,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 		Slider.Name = NeverLose.RandomString();
 		Slider.Parent = Handler
-		Slider.BackgroundColor3 = Color3.fromRGB(26, 28, 36)
+		Slider.BackgroundColor3 = NeverLose.Theme.Control
 		Slider.BackgroundTransparency = 1.000
 		Slider.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Slider.BorderSizePixel = 0
@@ -1925,13 +1926,13 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		Slider.ZIndex = ZINdex + 13
 		Slider.LayoutOrder = -(#Handler:GetChildren() + 5);
 
-		UICorner.CornerRadius = UDim.new(0, 4)
+		UICorner.CornerRadius = UDim.new(0, 8)
 		UICorner.Parent = Slider
 
 		ValueFrame.Name = NeverLose.RandomString();
 		ValueFrame.Parent = Slider
 		ValueFrame.AnchorPoint = Vector2.new(1, 0)
-		ValueFrame.BackgroundColor3 = Color3.fromRGB(26, 28, 36)
+		ValueFrame.BackgroundColor3 = NeverLose.Theme.Control
 		ValueFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		ValueFrame.BorderSizePixel = 0
 		ValueFrame.ClipsDescendants = true
@@ -1939,11 +1940,11 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ValueFrame.Size = UDim2.new(0, SliderLib.MaximumSize + boxSize, 0, 18)
 		ValueFrame.ZIndex = ZINdex + 13
 
-		UICorner_2.CornerRadius = UDim.new(0, 4)
+		UICorner_2.CornerRadius = UDim.new(0, 8)
 		UICorner_2.Parent = ValueFrame
 
 		UIStroke.Transparency = 0.650
-		UIStroke.Color = Color3.fromRGB(45, 48, 58)
+		UIStroke.Color = NeverLose.Theme.Border
 		UIStroke.Parent = ValueFrame
 
 		ValueLabel.Name = NeverLose.RandomString();
@@ -1958,7 +1959,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ValueLabel.ZIndex = ZINdex + 14
 		ValueLabel.Font = Enum.Font.GothamMedium
 		ValueLabel.Text = tostring(Config.Default)..tostring(Config.Type);
-		ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		ValueLabel.TextColor3 = NeverLose.Theme.Text
 		ValueLabel.TextSize = 10.000
 		ValueLabel.ClearTextOnFocus = false;
 		ValueLabel.TextTransparency = 0
@@ -1977,7 +1978,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		SlideFrame.Name = NeverLose.RandomString();
 		SlideFrame.Parent = SlideMain
 		SlideFrame.AnchorPoint = Vector2.new(0, 0.5)
-		SlideFrame.BackgroundColor3 = Color3.fromRGB(30, 29, 36)
+		SlideFrame.BackgroundColor3 = NeverLose.Theme.Track
 		SlideFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		SlideFrame.BorderSizePixel = 0
 		SlideFrame.Position = UDim2.new(0, 0, 0.5, 0)
@@ -2194,7 +2195,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 		Option.Name = NeverLose.RandomString();
 		Option.Parent = Handler
-		Option.BackgroundColor3 = Color3.fromRGB(39, 40, 49)
+		Option.BackgroundColor3 = NeverLose.Theme.Hover
 		Option.BackgroundTransparency = 1.000
 		Option.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Option.BorderSizePixel = 0
@@ -2215,12 +2216,12 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		Icon.ZIndex = ZINdex + 14
 		Icon.FontFace = NeverLose.BuiltInBold
 		Icon.Text = (GearIcon == 1 and 'gear') or (GearIcon == 2 and 'chevron-large-right') or "three-dots-horizontal";
-		Icon.TextColor3 = Color3.fromRGB(223, 223, 223)
+		Icon.TextColor3 = NeverLose.Theme.Muted
 		Icon.TextSize = 16.000
 		Icon.TextTransparency = 0.400
 		Icon.TextWrapped = true
 
-		UICorner.CornerRadius = UDim.new(0, 4)
+		UICorner.CornerRadius = UDim.new(0, 8)
 		UICorner.Parent = Option
 
 		local Window = NeverLose:CreateOptionWindow(Option , ZINdex + 13);
@@ -2313,11 +2314,11 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ColorPicker.Size = UDim2.new(0, 18, 0, 18)
 		ColorPicker.ZIndex = ZINdex + 13
 
-		UICorner.CornerRadius = UDim.new(0, 4)
+		UICorner.CornerRadius = UDim.new(0, 8)
 		UICorner.Parent = ColorPicker
 
 		UIStroke.Transparency = 0.650
-		UIStroke.Color = Color3.fromRGB(45, 48, 58)
+		UIStroke.Color = NeverLose.Theme.Border
 		UIStroke.Parent = ColorPicker
 
 		ImageLabel.Parent = ColorPicker
@@ -2331,7 +2332,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ImageLabel.BackgroundTransparency = 1;
 		ImageLabel.ScaleType = Enum.ScaleType.Crop
 
-		UICorner_2.CornerRadius = UDim.new(0, 4)
+		UICorner_2.CornerRadius = UDim.new(0, 8)
 		UICorner_2.Parent = ImageLabel
 
 		local BackendM = NeverLose:CreateColorPicker(ColorPicker);
@@ -2430,18 +2431,18 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 		Keybind.Name = NeverLose.RandomString();
 		Keybind.Parent = Handler
-		Keybind.BackgroundColor3 = Color3.fromRGB(26, 28, 36)
+		Keybind.BackgroundColor3 = NeverLose.Theme.Control
 		Keybind.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Keybind.BorderSizePixel = 0
 		Keybind.ClipsDescendants = true
 		Keybind.Size = UDim2.new(0, 45, 0, 18)
 		Keybind.ZIndex = ZINdex + 13
 
-		UICorner.CornerRadius = UDim.new(0, 4)
+		UICorner.CornerRadius = UDim.new(0, 8)
 		UICorner.Parent = Keybind
 
 		UIStroke.Transparency = 0.650
-		UIStroke.Color = Color3.fromRGB(45, 48, 58)
+		UIStroke.Color = NeverLose.Theme.Border
 		UIStroke.Parent = Keybind
 
 		ValueLabel.Name = NeverLose.RandomString();
@@ -2457,7 +2458,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ValueLabel.ZIndex = ZINdex + 14
 		ValueLabel.Font = Enum.Font.GothamMedium
 		ValueLabel.Text = NeverLose:KeyCodeToStr(Config.Default or "None")
-		ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		ValueLabel.TextColor3 = NeverLose.Theme.Text
 		ValueLabel.TextSize = 10.000
 		ValueLabel.TextTransparency = 0
 
@@ -2584,18 +2585,18 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 		TextInput.Name = NeverLose.RandomString();
 		TextInput.Parent = Handler
-		TextInput.BackgroundColor3 = Color3.fromRGB(26, 28, 36)
+		TextInput.BackgroundColor3 = NeverLose.Theme.Control
 		TextInput.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		TextInput.BorderSizePixel = 0
 		TextInput.ClipsDescendants = true
 		TextInput.Size = UDim2.new(0, Config.Size, 0, 18)
 		TextInput.ZIndex = ZINdex + 13
 
-		UICorner.CornerRadius = UDim.new(0, 4)
+		UICorner.CornerRadius = UDim.new(0, 8)
 		UICorner.Parent = TextInput
 
 		UIStroke.Transparency = 0.650
-		UIStroke.Color = Color3.fromRGB(45, 48, 58)
+		UIStroke.Color = NeverLose.Theme.Border
 		UIStroke.Parent = TextInput
 
 		TextBox.Parent = TextInput
@@ -2611,7 +2612,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		TextBox.Font = Enum.Font.GothamMedium
 		TextBox.PlaceholderText = Config.Placeholder
 		TextBox.Text = tostring(Config.Default)
-		TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+		TextBox.TextColor3 = NeverLose.Theme.Text
 		TextBox.TextSize = 11.000
 		TextBox.TextTransparency = 0.350
 		TextBox.TextXAlignment = Enum.TextXAlignment.Left
@@ -2698,7 +2699,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 		Dropdown.Name = NeverLose.RandomString();
 		Dropdown.Parent = Handler
-		Dropdown.BackgroundColor3 = Color3.fromRGB(26, 28, 36)
+		Dropdown.BackgroundColor3 = NeverLose.Theme.Control
 		Dropdown.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Dropdown.BorderSizePixel = 0
 		Dropdown.ClipsDescendants = true
@@ -2717,16 +2718,16 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		DropdownIcon.ZIndex = ZINdex + 14
 		DropdownIcon.FontFace = NeverLose.BuiltInBold
 		DropdownIcon.Text = "chevron-small-down"
-		DropdownIcon.TextColor3 = Color3.fromRGB(223, 223, 223)
+		DropdownIcon.TextColor3 = NeverLose.Theme.Muted
 		DropdownIcon.TextSize = 16.000
 		DropdownIcon.TextTransparency = 0
 		DropdownIcon.TextWrapped = true
 
-		UICorner.CornerRadius = UDim.new(0, 4)
+		UICorner.CornerRadius = UDim.new(0, 8)
 		UICorner.Parent = Dropdown
 
 		UIStroke.Transparency = 0.650
-		UIStroke.Color = Color3.fromRGB(45, 48, 58)
+		UIStroke.Color = NeverLose.Theme.Border
 		UIStroke.Parent = Dropdown
 
 		BasedLabel.Name = NeverLose.RandomString();
@@ -2742,7 +2743,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		BasedLabel.ZIndex = ZINdex + 14
 		BasedLabel.Font = Enum.Font.GothamMedium
 		BasedLabel.Text = NeverLose.ParseDropdown(Config.Default);
-		BasedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		BasedLabel.TextColor3 = NeverLose.Theme.Text
 		BasedLabel.TextSize = 12.000
 		BasedLabel.TextTransparency = 0
 		BasedLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -2823,7 +2824,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			DropdownHandler.Name = NeverLose.RandomString();
 			DropdownHandler.Parent = NeverLose.ScreenGui;
 			DropdownHandler.AnchorPoint = Vector2.new(0.5, 0)
-			DropdownHandler.BackgroundColor3 = Color3.fromRGB(23, 23, 25)
+			DropdownHandler.BackgroundColor3 = NeverLose.Theme.Panel
 			DropdownHandler.BackgroundTransparency = 0
 			DropdownHandler.BorderColor3 = Color3.fromRGB(0, 0, 0)
 			DropdownHandler.BorderSizePixel = 0
@@ -2848,11 +2849,12 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 				end;
 			end));
 
-			UICorner.CornerRadius = UDim.new(0, 10)
+			UICorner.CornerRadius = UDim.new(0, 14)
 			UICorner.Parent = DropdownHandler
+			NeverLose:AddGlassGradient(DropdownHandler, 120);
 
 			UIStroke.Transparency = 0.650
-			UIStroke.Color = Color3.fromRGB(45, 48, 58)
+			UIStroke.Color = NeverLose.Theme.Border
 			UIStroke.Parent = DropdownHandler
 
 			DropdownScrollFrame.Name = NeverLose.RandomString();
@@ -2902,8 +2904,8 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 					SetPosition();
 
-					NeverLose.PlayAnimate(DropdownHandler , SlowyTween , {
-						BackgroundTransparency = 0.035
+				NeverLose.PlayAnimate(DropdownHandler , SlowyTween , {
+					BackgroundTransparency = 0.08
 					})
 
 					if Config.AutoUpdate then
@@ -2981,7 +2983,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 				ItemFrame.Name = NeverLose.RandomString();
 				ItemFrame.Parent = DropdownLib.RootItem
-				ItemFrame.BackgroundColor3 = Color3.fromRGB(29, 31, 38)
+				ItemFrame.BackgroundColor3 = NeverLose.Theme.Control
 				ItemFrame.BackgroundTransparency = 1.000
 				ItemFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				ItemFrame.BorderSizePixel = 0
@@ -2999,12 +3001,12 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 				ItemLabel.ZIndex = ZINdex + 1258
 				ItemLabel.Font = Enum.Font.GothamMedium
 				ItemLabel.Text = tostring(Value);
-				ItemLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				ItemLabel.TextColor3 = NeverLose.Theme.Text
 				ItemLabel.TextSize = 13.000
 				ItemLabel.TextTransparency = 0.200
 				ItemLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-				UICorner.CornerRadius = UDim.new(0, 10)
+				UICorner.CornerRadius = UDim.new(0, 14)
 				UICorner.Parent = ItemFrame
 				local sizetext = TextService:GetTextSize(ItemLabel.Text , ItemLabel.TextSize,ItemLabel.Font,Vector2.new(math.huge,math.huge));
 
@@ -3026,7 +3028,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 					Icon.ZIndex = ZINdex + 1259
 					Icon.FontFace = NeverLose.BuiltInBold;
 					Icon.Text = "check"
-					Icon.TextColor3 = Color3.fromRGB(223, 223, 223)
+					Icon.TextColor3 = NeverLose.Theme.Muted
 					Icon.TextSize = 18.000
 					Icon.TextTransparency = 1
 					Icon.TextWrapped = true;
@@ -3259,8 +3261,8 @@ function NeverLose:CreateToolTips(Container: Frame , Name: string , Content: str
 	local Shadow = NeverLose:CreateShadow(Tooltips);
 
 	Tooltips.Name = NeverLose.RandomString();
-	Tooltips.BackgroundColor3 = Color3.fromRGB(20, 22, 27)
-	Tooltips.BackgroundTransparency = 0.075
+	Tooltips.BackgroundColor3 = NeverLose.Theme.Panel
+	Tooltips.BackgroundTransparency = 0.1
 	Tooltips.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	Tooltips.BorderSizePixel = 0
 	Tooltips.ClipsDescendants = true
@@ -3268,11 +3270,12 @@ function NeverLose:CreateToolTips(Container: Frame , Name: string , Content: str
 	Tooltips.Size = UDim2.new(0,0,0,0)
 	Tooltips.ZIndex = 130
 
-	UICorner.CornerRadius = UDim.new(0, 10)
+	UICorner.CornerRadius = UDim.new(0, 14)
 	UICorner.Parent = Tooltips
+	NeverLose:AddGlassGradient(Tooltips, 120);
 
 	UIStroke.Transparency = 0.650
-	UIStroke.Color = Color3.fromRGB(45, 48, 58)
+	UIStroke.Color = NeverLose.Theme.Border
 	UIStroke.Parent = Tooltips
 
 	TooltipName.Name = NeverLose.RandomString();
@@ -3286,7 +3289,7 @@ function NeverLose:CreateToolTips(Container: Frame , Name: string , Content: str
 	TooltipName.ZIndex = 132
 	TooltipName.Font = Enum.Font.GothamBold
 	TooltipName.Text = Name
-	TooltipName.TextColor3 = Color3.fromRGB(255, 255, 255)
+	TooltipName.TextColor3 = NeverLose.Theme.Text
 	TooltipName.TextSize = 15.000
 	TooltipName.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -3301,7 +3304,7 @@ function NeverLose:CreateToolTips(Container: Frame , Name: string , Content: str
 	TooltipContent.ZIndex = 132
 	TooltipContent.Font = Enum.Font.GothamBold
 	TooltipContent.Text = Content
-	TooltipContent.TextColor3 = Color3.fromRGB(255, 255, 255)
+	TooltipContent.TextColor3 = NeverLose.Theme.Text
 	TooltipContent.TextSize = 12.000
 	TooltipContent.TextTransparency = 0.650
 	TooltipContent.TextXAlignment = Enum.TextXAlignment.Left
@@ -3340,8 +3343,8 @@ function NeverLose:CreateToolTips(Container: Frame , Name: string , Content: str
 		if value then
 			Tooltips.Position = UDim2.fromOffset(Container.AbsolutePosition.X + Container.AbsoluteSize.X , Container.AbsolutePosition.Y + (Container.AbsoluteSize.Y + 25));
 
-			NeverLose.PlayAnimate(Tooltips , SlowyTween , {
-				BackgroundTransparency = 0.075
+		NeverLose.PlayAnimate(Tooltips , SlowyTween , {
+			BackgroundTransparency = 0.1
 			})
 
 			NeverLose.PlayAnimate(UIStroke , SlowyTween , {
@@ -3419,7 +3422,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 
 		BasedFrame.Name = NeverLose.RandomString();
 		BasedFrame.Parent = Frame
-		BasedFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+		BasedFrame.BackgroundColor3 = NeverLose.Theme.Elevated
 		BasedFrame.BackgroundTransparency = 1.000
 		BasedFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		BasedFrame.BorderSizePixel = 0
@@ -3439,7 +3442,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		BasedLabel.ZIndex = LayerIndex + 9
 		BasedLabel.Font = Enum.Font.GothamMedium
 		BasedLabel.Text = Name
-		BasedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		BasedLabel.TextColor3 = NeverLose.Theme.Text
 		BasedLabel.TextSize = 13.000
 		BasedLabel.TextTransparency = 0
 		BasedLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -3447,7 +3450,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		LineFrame.Name = NeverLose.RandomString();
 		LineFrame.Parent = BasedFrame
 		LineFrame.AnchorPoint = Vector2.new(0.5, 1)
-		LineFrame.BackgroundColor3 = Color3.fromRGB(45, 48, 58)
+		LineFrame.BackgroundColor3 = NeverLose.Theme.Border
 		LineFrame.BackgroundTransparency = 0.650
 		LineFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		LineFrame.BorderSizePixel = 0
@@ -3473,7 +3476,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 		UIListLayout.Padding = UDim.new(0, 5)
 
-		UICorner.CornerRadius = UDim.new(0, 10)
+		UICorner.CornerRadius = UDim.new(0, 14)
 		UICorner.Parent = BasedFrame
 
 		local UpdateWarp = LPH_NO_VIRTUALIZE(function()
@@ -3588,7 +3591,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 
 		ButtonFrame.Name = NeverLose.RandomString();
 		ButtonFrame.Parent = Frame
-		ButtonFrame.BackgroundColor3 = Color3.fromRGB(25, 27, 33)
+		ButtonFrame.BackgroundColor3 = NeverLose.Theme.Elevated
 		ButtonFrame.BackgroundTransparency = 1.000
 		ButtonFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		ButtonFrame.BorderSizePixel = 0
@@ -3606,7 +3609,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		BasedLabel.ZIndex = LayerIndex + 9
 		BasedLabel.Font = Enum.Font.GothamMedium
 		BasedLabel.Text = Config.Name;
-		BasedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		BasedLabel.TextColor3 = NeverLose.Theme.Text
 		BasedLabel.TextSize = 13.000
 		BasedLabel.TextTransparency = 0
 		BasedLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -3614,7 +3617,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		LineFrame.Name = NeverLose.RandomString();
 		LineFrame.Parent = ButtonFrame
 		LineFrame.AnchorPoint = Vector2.new(0.5, 1)
-		LineFrame.BackgroundColor3 = Color3.fromRGB(45, 48, 58)
+		LineFrame.BackgroundColor3 = NeverLose.Theme.Border
 		LineFrame.BackgroundTransparency = 0.650
 		LineFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		LineFrame.BorderSizePixel = 0
@@ -3622,7 +3625,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		LineFrame.Size = UDim2.new(1, -20, 0, 1)
 		LineFrame.ZIndex = LayerIndex + 11
 
-		UICorner.CornerRadius = UDim.new(0, 10)
+		UICorner.CornerRadius = UDim.new(0, 14)
 		UICorner.Parent = ButtonFrame
 
 		Icon.Name = NeverLose.RandomString();
@@ -3636,7 +3639,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		Icon.ZIndex = LayerIndex + 9
 		Icon.FontFace = NeverLose.BuiltInBold
 		Icon.Text = Config.Icon
-		Icon.TextColor3 = Color3.fromRGB(223, 223, 223)
+		Icon.TextColor3 = NeverLose.Theme.Muted
 		Icon.TextSize = 16.000
 		Icon.TextTransparency = 0.250
 		Icon.TextWrapped = true
@@ -3722,7 +3725,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 
 		UserFrame.Name = NeverLose.RandomString();
 		UserFrame.Parent = Frame
-		UserFrame.BackgroundColor3 = Color3.fromRGB(25, 27, 33)
+		UserFrame.BackgroundColor3 = NeverLose.Theme.Elevated
 		UserFrame.BackgroundTransparency = 1.000
 		UserFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		UserFrame.BorderSizePixel = 0
@@ -3740,7 +3743,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		UserLabel.ZIndex = LayerIndex + 9
 		UserLabel.Font = Enum.Font.GothamMedium
 		UserLabel.Text = Name or 'User'
-		UserLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		UserLabel.TextColor3 = NeverLose.Theme.Text
 		UserLabel.TextSize = 13.000
 		UserLabel.TextTransparency = 0.200
 		UserLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -3748,7 +3751,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		LineFrame.Name = NeverLose.RandomString();
 		LineFrame.Parent = UserFrame
 		LineFrame.AnchorPoint = Vector2.new(0.5, 1)
-		LineFrame.BackgroundColor3 = Color3.fromRGB(45, 48, 58)
+		LineFrame.BackgroundColor3 = NeverLose.Theme.Border
 		LineFrame.BackgroundTransparency = 0.650
 		LineFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		LineFrame.BorderSizePixel = 0
@@ -3756,7 +3759,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		LineFrame.Size = UDim2.new(1, -20, 0, 1)
 		LineFrame.ZIndex = LayerIndex + 11
 
-		UICorner.CornerRadius = UDim.new(0, 10)
+		UICorner.CornerRadius = UDim.new(0, 14)
 		UICorner.Parent = UserFrame
 
 		LogoImage.Name = NeverLose.RandomString();
@@ -3784,7 +3787,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		UserStatusLabel.ZIndex = LayerIndex + 9
 		UserStatusLabel.Font = Enum.Font.GothamMedium
 		UserStatusLabel.Text = Expires or 'Never'
-		UserStatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		UserStatusLabel.TextColor3 = NeverLose.Theme.Text
 		UserStatusLabel.TextSize = 13.000
 		UserStatusLabel.TextTransparency = 0.200
 		UserStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -3913,11 +3916,13 @@ function NeverLose:CreateWindow(Config)
 	local SearchIcon = Instance.new("TextLabel")
 	local SearchBox = Instance.new("TextBox")
 	local TabContainer = Instance.new("Frame")
+	local WindowScale = Instance.new("UIScale")
+	local WindowStroke = Instance.new("UIStroke")
 
 	WindowFrame.Name = NeverLose.RandomString();
 	WindowFrame.Parent = NeverLose.ScreenGui;
 	WindowFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	WindowFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 16)
+	WindowFrame.BackgroundColor3 = NeverLose.Theme.Base
 	WindowFrame.BackgroundTransparency = 0
 	WindowFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	WindowFrame.BorderSizePixel = 0
@@ -3925,6 +3930,34 @@ function NeverLose:CreateWindow(Config)
 	WindowFrame.Position = UDim2.new(255, 0, 255, 0)
 	WindowFrame.Size = Window.Size
 	WindowFrame.Active = true;
+	WindowScale.Scale = 0.965;
+	WindowScale.Parent = WindowFrame;
+	WindowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+	WindowStroke.Color = NeverLose.Theme.Border;
+	WindowStroke.Thickness = 1;
+	WindowStroke.Transparency = 1;
+	WindowStroke.Parent = WindowFrame;
+	NeverLose:AddGlassGradient(WindowFrame, 125);
+
+	local AuroraGradient = Instance.new("UIGradient");
+	AuroraGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, NeverLose.Theme.Accent),
+		ColorSequenceKeypoint.new(0.5, NeverLose.Theme.AccentSoft),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(102, 226, 255)),
+	});
+	AuroraGradient.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.72),
+		NumberSequenceKeypoint.new(0.5, 0.28),
+		NumberSequenceKeypoint.new(1, 0.72),
+	});
+	AuroraGradient.Rotation = 18;
+	AuroraGradient.Parent = WindowStroke;
+	local AuroraTween = TweenService:Create(
+		AuroraGradient,
+		TweenInfo.new(14, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
+		{ Rotation = 378 }
+	);
+	AuroraTween:Play();
 
 	if not NeverLose.EnabledBlur then
 		WindowFrame.BackgroundTransparency = 0
@@ -3961,16 +3994,13 @@ function NeverLose:CreateWindow(Config)
 
 	Window.SetRender = LPH_NO_VIRTUALIZE(function(self , value)
 		if value then
+			NeverLose.PlayAnimate(WindowScale, VSlowTween, { Scale = 1 });
 			NeverLose.PlayAnimate(WindowFrame , SlowyTween , {
-				BackgroundTransparency = 0,
+				BackgroundTransparency = NeverLose.EnabledBlur and 0.12 or 0,
 				Size = Window.Size
 			})
 
-			if WindowStroke then
-    			NeverLose.PlayAnimate(WindowStroke, SlowyTween, {
-        			Transparency = 0.650
-    			})
-			end
+			NeverLose.PlayAnimate(WindowStroke, SlowyTween, { Transparency = 0.18 });
 			NeverLose.PlayAnimate(LogoImage , SlowyTween , {
 				ImageTransparency = 0
 			})
@@ -4008,7 +4038,7 @@ function NeverLose:CreateWindow(Config)
 			})
 
 			NeverLose.PlayAnimate(RightMenuFrame , SlowyTween , {
-				BackgroundTransparency = 0
+				BackgroundTransparency = NeverLose.EnabledBlur and 0.16 or 0
 			})
 
 			NeverLose.PlayAnimate(UIStroke , SlowyTween , {
@@ -4051,19 +4081,16 @@ function NeverLose:CreateWindow(Config)
 				TextTransparency = 0.350
 			})
 
-			Window.Shadow:Render(false);
+			Window.Shadow:Render(true);
 		else
+			NeverLose.PlayAnimate(WindowScale, SlowyTween, { Scale = 0.965 });
 
 			NeverLose.PlayAnimate(WindowFrame , SlowyTween , {
 				BackgroundTransparency = 1,
 				Size = Window.Size + UDim2.fromOffset(-15,-15)
 			})
 
-			if WindowStroke then
-    			NeverLose.PlayAnimate(WindowStroke, SlowyTween, {
-        			Transparency = 1
-    			})
-			end
+			NeverLose.PlayAnimate(WindowStroke, SlowyTween, { Transparency = 1 });
 				
 			NeverLose.PlayAnimate(LogoImage , SlowyTween , {
 				ImageTransparency = 1
@@ -4149,7 +4176,7 @@ function NeverLose:CreateWindow(Config)
 		end;
 	end);
 
-	Window.Shadow = { Render = function() end };
+	Window.Shadow = NeverLose:CreateShadow(WindowFrame, true);
 
 	task.delay(0.25,function()
 		WindowFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -4159,9 +4186,7 @@ function NeverLose:CreateWindow(Config)
 		end)))
 	end)
 
-	if NeverLose.EnabledBlur then
-		NeverLose:CreateBlurModule(WindowFrame,Window.Signal);
-	end;
+	NeverLose:CreateBlurModule(WindowFrame,Window.Signal);
 
 	do
 		local Frame = Instance.new("Frame")
@@ -4177,14 +4202,9 @@ function NeverLose:CreateWindow(Config)
 		NeverLose.Drag(Frame , WindowFrame , 0.15)
 	end
 
-	UICorner.CornerRadius = UDim.new(0, 12)
+	UICorner.CornerRadius = UDim.new(0, 18)
 	UICorner.Parent = WindowFrame
 
-    local WindowStroke = Instance.new("UIStroke")
-    WindowStroke.Transparency = 0.650
-    WindowStroke.Color = Color3.fromRGB(45, 48, 58)
-    WindowStroke.Parent = WindowFrame
-	
 	LeftMenuFrame.Name = NeverLose.RandomString();
 	LeftMenuFrame.Parent = WindowFrame
 	LeftMenuFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -4215,7 +4235,7 @@ function NeverLose:CreateWindow(Config)
 	LogoImage.Image = Window.Logo
 	LogoImage.ImageColor3 = NeverLose.IconColor
 
-	UICorner_2.CornerRadius = UDim.new(0, 7)
+	UICorner_2.CornerRadius = UDim.new(0, 18)
 	UICorner_2.Parent = LogoImage
 
 	WindowName.Name = NeverLose.RandomString();
@@ -4229,7 +4249,7 @@ function NeverLose:CreateWindow(Config)
 	WindowName.ZIndex = 7
 	WindowName.Font = Enum.Font.GothamBold
 	WindowName.Text = Window.Name
-	WindowName.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WindowName.TextColor3 = NeverLose.Theme.Text
 	WindowName.TextSize = 18.000
 	WindowName.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -4244,7 +4264,7 @@ function NeverLose:CreateWindow(Config)
 	WindowContent.ZIndex = 7
 	WindowContent.Font = Enum.Font.GothamBold
 	WindowContent.Text = Window.Content
-	WindowContent.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WindowContent.TextColor3 = NeverLose.Theme.Text
 	WindowContent.TextSize = 9.000
 	WindowContent.TextTransparency = 0
 	WindowContent.TextXAlignment = Enum.TextXAlignment.Left
@@ -4252,7 +4272,7 @@ function NeverLose:CreateWindow(Config)
 	LineFrame.Name = NeverLose.RandomString();
 	LineFrame.Parent = HeadFrame
 	LineFrame.AnchorPoint = Vector2.new(0.5, 1)
-	LineFrame.BackgroundColor3 = Color3.fromRGB(45, 48, 58)
+	LineFrame.BackgroundColor3 = NeverLose.Theme.Border
 	LineFrame.BackgroundTransparency = 0.650
 	LineFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	LineFrame.BorderSizePixel = 0
@@ -4319,7 +4339,7 @@ function NeverLose:CreateWindow(Config)
 	AccountName.ZIndex = 7
 	AccountName.Font = Enum.Font.GothamBold
 	AccountName.Text = ""
-	AccountName.TextColor3 = Color3.fromRGB(255, 255, 255)
+	AccountName.TextColor3 = NeverLose.Theme.Text
 	AccountName.TextSize = 14.000
 	AccountName.TextXAlignment = Enum.TextXAlignment.Left
 	AccountName.TextTruncate = Enum.TextTruncate.SplitWord;
@@ -4335,7 +4355,7 @@ function NeverLose:CreateWindow(Config)
 	ExpireLabel.ZIndex = 7
 	ExpireLabel.Font = Enum.Font.GothamBold
 	ExpireLabel.Text = "never"
-	ExpireLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	ExpireLabel.TextColor3 = NeverLose.Theme.Text
 	ExpireLabel.TextSize = 10.000
 	ExpireLabel.TextTransparency = 0
 	ExpireLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -4343,7 +4363,7 @@ function NeverLose:CreateWindow(Config)
 	LineFrame_2.Name = NeverLose.RandomString();
 	LineFrame_2.Parent = BottomFrame
 	LineFrame_2.AnchorPoint = Vector2.new(0.5, 0)
-	LineFrame_2.BackgroundColor3 = Color3.fromRGB(45, 48, 58)
+	LineFrame_2.BackgroundColor3 = NeverLose.Theme.Border
 	LineFrame_2.BackgroundTransparency = 0.650
 	LineFrame_2.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	LineFrame_2.BorderSizePixel = 0
@@ -4363,7 +4383,7 @@ function NeverLose:CreateWindow(Config)
 	UserSettingButton.ZIndex = 7
 	UserSettingButton.FontFace = NeverLose.BuiltInBold
 	UserSettingButton.Text = "chevron-large-right"
-	UserSettingButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	UserSettingButton.TextColor3 = NeverLose.Theme.Text
 	UserSettingButton.TextSize = 13.000
 	UserSettingButton.TextTransparency = 0
 
@@ -4381,8 +4401,8 @@ function NeverLose:CreateWindow(Config)
 
 	RightMenuFrame.Name = NeverLose.RandomString();
 	RightMenuFrame.Parent = WindowFrame
-	RightMenuFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 16)
-	RightMenuFrame.BackgroundTransparency = 0
+	RightMenuFrame.BackgroundColor3 = NeverLose.Theme.Base
+	RightMenuFrame.BackgroundTransparency = NeverLose.EnabledBlur and 0.16 or 0
 	RightMenuFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	RightMenuFrame.BorderSizePixel = 0
 	RightMenuFrame.ClipsDescendants = true
@@ -4391,11 +4411,12 @@ function NeverLose:CreateWindow(Config)
 	RightMenuFrame.ZIndex = 8
 
 	UIStroke.Transparency = 0.650
-	UIStroke.Color = Color3.fromRGB(45, 48, 58)
+	UIStroke.Color = NeverLose.Theme.Border
 	UIStroke.Parent = RightMenuFrame
 
-	UICorner_4.CornerRadius = UDim.new(0, 13)
+	UICorner_4.CornerRadius = UDim.new(0, 18)
 	UICorner_4.Parent = RightMenuFrame
+	NeverLose:AddGlassGradient(RightMenuFrame, 110);
 
 	RightHeader.Name = NeverLose.RandomString();
 	RightHeader.Parent = RightMenuFrame
@@ -4409,7 +4430,7 @@ function NeverLose:CreateWindow(Config)
 	LineFrame_3.Name = NeverLose.RandomString();
 	LineFrame_3.Parent = RightHeader
 	LineFrame_3.AnchorPoint = Vector2.new(0.5, 1)
-	LineFrame_3.BackgroundColor3 = Color3.fromRGB(45, 48, 58)
+	LineFrame_3.BackgroundColor3 = NeverLose.Theme.Border
 	LineFrame_3.BackgroundTransparency = 0.650
 	LineFrame_3.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	LineFrame_3.BorderSizePixel = 0
@@ -4420,7 +4441,7 @@ function NeverLose:CreateWindow(Config)
 	ConfigFrame.Name = NeverLose.RandomString();
 	ConfigFrame.Parent = RightHeader
 	ConfigFrame.AnchorPoint = Vector2.new(0, 0.5)
-	ConfigFrame.BackgroundColor3 = Color3.fromRGB(13, 17, 22)
+	ConfigFrame.BackgroundColor3 = NeverLose.Theme.Track
 	ConfigFrame.BackgroundTransparency = 0.750
 	ConfigFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	ConfigFrame.BorderSizePixel = 0
@@ -4429,10 +4450,10 @@ function NeverLose:CreateWindow(Config)
 	ConfigFrame.ZIndex = 9
 
 	UIStroke_2.Transparency = 0.650
-	UIStroke_2.Color = Color3.fromRGB(45, 48, 58)
+	UIStroke_2.Color = NeverLose.Theme.Border
 	UIStroke_2.Parent = ConfigFrame
 
-	UICorner_5.CornerRadius = UDim.new(0, 4)
+	UICorner_5.CornerRadius = UDim.new(0, 8)
 	UICorner_5.Parent = ConfigFrame
 
 	ConfigIcon.Name = NeverLose.RandomString();
@@ -4447,14 +4468,14 @@ function NeverLose:CreateWindow(Config)
 	ConfigIcon.ZIndex = 9
 	ConfigIcon.FontFace = NeverLose.BuiltInBold
 	ConfigIcon.Text = "pencil-square"
-	ConfigIcon.TextColor3 = Color3.fromRGB(223, 223, 223)
+	ConfigIcon.TextColor3 = NeverLose.Theme.Muted
 	ConfigIcon.TextSize = 16.000
 	ConfigIcon.TextTransparency = 0.250
 	ConfigIcon.TextWrapped = true
 
 	LineFrame_4.Name = NeverLose.RandomString();
 	LineFrame_4.Parent = ConfigFrame
-	LineFrame_4.BackgroundColor3 = Color3.fromRGB(45, 48, 58)
+	LineFrame_4.BackgroundColor3 = NeverLose.Theme.Border
 	LineFrame_4.BackgroundTransparency = 0.650
 	LineFrame_4.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	LineFrame_4.BorderSizePixel = 0
@@ -4473,7 +4494,7 @@ function NeverLose:CreateWindow(Config)
 	ConfigName.ZIndex = 9
 	ConfigName.Font = Enum.Font.GothamMedium
 	ConfigName.Text = "Default"
-	ConfigName.TextColor3 = Color3.fromRGB(255, 255, 255)
+	ConfigName.TextColor3 = NeverLose.Theme.Text
 	ConfigName.TextSize = 12.000
 	ConfigName.TextTransparency = 0.350
 	ConfigName.TextXAlignment = Enum.TextXAlignment.Left
@@ -4490,7 +4511,7 @@ function NeverLose:CreateWindow(Config)
 	ConfigBthIcon.ZIndex = 9
 	ConfigBthIcon.FontFace = NeverLose.BuiltInBold
 	ConfigBthIcon.Text = "chevron-small-down"
-	ConfigBthIcon.TextColor3 = Color3.fromRGB(223, 223, 223)
+	ConfigBthIcon.TextColor3 = NeverLose.Theme.Muted
 	ConfigBthIcon.TextSize = 16.000
 	ConfigBthIcon.TextTransparency = 0.250
 	ConfigBthIcon.TextWrapped = true
@@ -4519,7 +4540,7 @@ function NeverLose:CreateWindow(Config)
 	SearchIcon.ZIndex = 12
 	SearchIcon.FontFace = NeverLose.BuiltInBold
 	SearchIcon.Text = "magnifying-glass"
-	SearchIcon.TextColor3 = Color3.fromRGB(223, 223, 223)
+	SearchIcon.TextColor3 = NeverLose.Theme.Muted
 	SearchIcon.TextSize = 14.000
 	SearchIcon.TextTransparency = 0.45
 	SearchIcon.TextWrapped = true
@@ -4538,7 +4559,7 @@ function NeverLose:CreateWindow(Config)
 	SearchBox.Font = Enum.Font.GothamMedium
 	SearchBox.PlaceholderText = "Search"
 	SearchBox.Text = ""
-	SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+	SearchBox.TextColor3 = NeverLose.Theme.Text
 	SearchBox.TextSize = 13.000
 	SearchBox.TextTransparency = 1
 	SearchBox.TextXAlignment = Enum.TextXAlignment.Left
@@ -4726,7 +4747,7 @@ function NeverLose:CreateWindow(Config)
 		TabLabel.ZIndex = 8
 		TabLabel.Font = Enum.Font.GothamMedium
 		TabLabel.Text = Name
-		TabLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		TabLabel.TextColor3 = NeverLose.Theme.Text
 		TabLabel.TextSize = 11.000
 		TabLabel.TextTransparency = 0.500
 		TabLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -4768,14 +4789,14 @@ function NeverLose:CreateWindow(Config)
 
 		TabButton.Name = NeverLose.RandomString();
 		TabButton.Parent = LeftScrollingFrame
-		TabButton.BackgroundColor3 = Color3.fromRGB(41, 45, 49)
+		TabButton.BackgroundColor3 = NeverLose.Theme.Active
 		TabButton.BackgroundTransparency = 0.500
 		TabButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		TabButton.BorderSizePixel = 0
 		TabButton.Size = UDim2.new(1, -12, 0, 29)
 		TabButton.ZIndex = 8
 
-		UICorner.CornerRadius = UDim.new(0, 6)
+		UICorner.CornerRadius = UDim.new(0, 14)
 		UICorner.Parent = TabButton
 
 		TabIcon.Name = NeverLose.RandomString();
@@ -4806,7 +4827,7 @@ function NeverLose:CreateWindow(Config)
 		TabContentLabel.ZIndex = 9
 		TabContentLabel.Font = Enum.Font.GothamMedium
 		TabContentLabel.Text = Config.Name
-		TabContentLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		TabContentLabel.TextColor3 = NeverLose.Theme.Text
 		TabContentLabel.TextSize = 12.000
 		TabContentLabel.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -4815,6 +4836,7 @@ function NeverLose:CreateWindow(Config)
 		local UIListLayout = Instance.new("UIListLayout")
 		local RightScroll = Instance.new("ScrollingFrame")
 		local UIListLayout_2 = Instance.new("UIListLayout")
+		local TabScale = Instance.new("UIScale")
 
 		TabFrame.Name = NeverLose.RandomString();
 		TabFrame.Parent = TabContainer
@@ -4827,6 +4849,8 @@ function NeverLose:CreateWindow(Config)
 		TabFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 		TabFrame.Size = UDim2.new(1, 0, 1, 0)
 		TabFrame.Visible = true;
+		TabScale.Scale = 0.985;
+		TabScale.Parent = TabFrame;
 
 		LeftScroll.Name = NeverLose.RandomString();
 		LeftScroll.Parent = TabFrame
@@ -4898,8 +4922,12 @@ function NeverLose:CreateWindow(Config)
 			Tab.Signal:SetValue(value);
 
 			if value then
+				NeverLose.PlayAnimate(TabScale, VSlowTween, { Scale = 1 });
+				NeverLose.PlayAnimate(TabFrame, VSlowTween, {
+					Position = UDim2.new(0.5, 0, 0.5, 0)
+				});
 				NeverLose.PlayAnimate(TabButton , SlowyTween , {
-					BackgroundTransparency = 0.500
+					BackgroundTransparency = 0.34
 				})
 
 				NeverLose.PlayAnimate(TabIcon , SlowyTween , {
@@ -4911,6 +4939,8 @@ function NeverLose:CreateWindow(Config)
 					TextTransparency = 0
 				})
 			else
+				TabFrame.Position = UDim2.new(0.5, 0, 0.5, 7);
+				TabScale.Scale = 0.985;
 				NeverLose.PlayAnimate(TabButton , SlowyTween , {
 					BackgroundTransparency = 1
 				})
@@ -5028,7 +5058,7 @@ function NeverLose:CreateWindow(Config)
 			SectionLabel.ZIndex = 9
 			SectionLabel.Font = Enum.Font.GothamMedium
 			SectionLabel.Text = Config.Name
-			SectionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+			SectionLabel.TextColor3 = NeverLose.Theme.Text
 			SectionLabel.TextSize = 11.000
 			SectionLabel.TextTransparency = 0.500
 			SectionLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -5036,7 +5066,7 @@ function NeverLose:CreateWindow(Config)
 			SectionHandler.Name = NeverLose.RandomString();
 			SectionHandler.Parent = SectionFrame
 			SectionHandler.AnchorPoint = Vector2.new(0.5, 0)
-			SectionHandler.BackgroundColor3 = Color3.fromRGB(23, 23, 25)
+			SectionHandler.BackgroundColor3 = NeverLose.Theme.Panel
 			SectionHandler.BackgroundTransparency = 0
 			SectionHandler.BorderColor3 = Color3.fromRGB(0, 0, 0)
 			SectionHandler.BorderSizePixel = 0
@@ -5046,11 +5076,12 @@ function NeverLose:CreateWindow(Config)
 			SectionHandler.ZIndex = 9
 
 			UIStroke.Transparency = 0.650
-			UIStroke.Color = Color3.fromRGB(45, 48, 58)
+			UIStroke.Color = NeverLose.Theme.Border
 			UIStroke.Parent = SectionHandler
 
-			UICorner.CornerRadius = UDim.new(0, 10)
+			UICorner.CornerRadius = UDim.new(0, 14)
 			UICorner.Parent = SectionHandler
+			NeverLose:AddGlassGradient(SectionHandler, 118);
 
 			UIListLayout.Parent = SectionHandler
 			UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -5079,7 +5110,7 @@ function NeverLose:CreateWindow(Config)
 					})
 
 					NeverLose.PlayAnimate(SectionHandler,SlowyTween,{
-						BackgroundTransparency = 0.500
+						BackgroundTransparency = 0.22
 					})
 
 					NeverLose.PlayAnimate(UIStroke,SlowyTween,{
@@ -5140,7 +5171,7 @@ function NeverLose:CreateWindow(Config)
 				ConfigMenu.Position = UDim2.fromOffset(ConfigFrame.AbsolutePosition.X + 110 , ConfigFrame.AbsolutePosition.Y + 96)
 
 				NeverLose.PlayAnimate(ConfigMenu , SlowyTween , {
-					BackgroundTransparency = 0.035,
+					BackgroundTransparency = 0.08,
 					Position = UDim2.fromOffset(ConfigFrame.AbsolutePosition.X + 110 , ConfigFrame.AbsolutePosition.Y + 95)
 				})	
 
@@ -5231,8 +5262,8 @@ function NeverLose:CreateWindow(Config)
 		ConfigMenu.Name = NeverLose.RandomString();
 		ConfigMenu.Parent = NeverLose.ScreenGui;
 		ConfigMenu.AnchorPoint = Vector2.new(0.5, 0)
-		ConfigMenu.BackgroundColor3 = Color3.fromRGB(20, 22, 27)
-		ConfigMenu.BackgroundTransparency = 0.035
+		ConfigMenu.BackgroundColor3 = NeverLose.Theme.Panel
+		ConfigMenu.BackgroundTransparency = 0.08
 		ConfigMenu.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		ConfigMenu.BorderSizePixel = 0
 		ConfigMenu.ClipsDescendants = true
@@ -5240,8 +5271,9 @@ function NeverLose:CreateWindow(Config)
 		ConfigMenu.Size = UDim2.new(0, 220,0, 110)
 		ConfigMenu.ZIndex = 151
 
-		UICorner.CornerRadius = UDim.new(0, 10)
+		UICorner.CornerRadius = UDim.new(0, 14)
 		UICorner.Parent = ConfigMenu
+		NeverLose:AddGlassGradient(ConfigMenu, 120);
 
 		UIListLayout.Parent = ConfigMenu
 		UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -5249,12 +5281,12 @@ function NeverLose:CreateWindow(Config)
 		UIListLayout.Padding = UDim.new(0, 4)
 
 		UIStroke.Transparency = 0.650
-		UIStroke.Color = Color3.fromRGB(45, 48, 58)
+		UIStroke.Color = NeverLose.Theme.Border
 		UIStroke.Parent = ConfigMenu
 
 		InputFrame.Name = NeverLose.RandomString();
 		InputFrame.Parent = ConfigMenu
-		InputFrame.BackgroundColor3 = Color3.fromRGB(25, 27, 33)
+		InputFrame.BackgroundColor3 = NeverLose.Theme.Elevated
 		InputFrame.BackgroundTransparency = 1.000
 		InputFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		InputFrame.BorderSizePixel = 0
@@ -5272,7 +5304,7 @@ function NeverLose:CreateWindow(Config)
 		BasedLabel.ZIndex = 154
 		BasedLabel.Font = Enum.Font.GothamMedium
 		BasedLabel.Text = "Config"
-		BasedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		BasedLabel.TextColor3 = NeverLose.Theme.Text
 		BasedLabel.TextSize = 13.000
 		BasedLabel.TextTransparency = 0
 		BasedLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -5280,7 +5312,7 @@ function NeverLose:CreateWindow(Config)
 		LineFrame.Name = NeverLose.RandomString();
 		LineFrame.Parent = InputFrame
 		LineFrame.AnchorPoint = Vector2.new(0.5, 1)
-		LineFrame.BackgroundColor3 = Color3.fromRGB(45, 48, 58)
+		LineFrame.BackgroundColor3 = NeverLose.Theme.Border
 		LineFrame.BackgroundTransparency = 0.650
 		LineFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		LineFrame.BorderSizePixel = 0
@@ -5321,18 +5353,18 @@ function NeverLose:CreateWindow(Config)
 
 		TextInput.Name = NeverLose.RandomString();
 		TextInput.Parent = BasedHandler
-		TextInput.BackgroundColor3 = Color3.fromRGB(26, 28, 36)
+		TextInput.BackgroundColor3 = NeverLose.Theme.Control
 		TextInput.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		TextInput.BorderSizePixel = 0
 		TextInput.ClipsDescendants = true
 		TextInput.Size = UDim2.new(0, 100, 0, 18)
 		TextInput.ZIndex = 154
 
-		UICorner_2.CornerRadius = UDim.new(0, 4)
+		UICorner_2.CornerRadius = UDim.new(0, 8)
 		UICorner_2.Parent = TextInput
 
 		UIStroke_2.Transparency = 0.650
-		UIStroke_2.Color = Color3.fromRGB(45, 48, 58)
+		UIStroke_2.Color = NeverLose.Theme.Border
 		UIStroke_2.Parent = TextInput
 
 		TextBox.Parent = TextInput
@@ -5348,14 +5380,14 @@ function NeverLose:CreateWindow(Config)
 		TextBox.Font = Enum.Font.GothamMedium
 		TextBox.PlaceholderText = "Config Name ..."
 		TextBox.Text = ""
-		TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+		TextBox.TextColor3 = NeverLose.Theme.Text
 		TextBox.TextSize = 11.000
 		TextBox.TextTransparency = 0.350
 		TextBox.TextXAlignment = Enum.TextXAlignment.Left
 
 		LoadConfig.Name = NeverLose.RandomString();
 		LoadConfig.Parent = BasedHandler
-		LoadConfig.BackgroundColor3 = Color3.fromRGB(39, 40, 49)
+		LoadConfig.BackgroundColor3 = NeverLose.Theme.Hover
 		LoadConfig.BackgroundTransparency = 1.000
 		LoadConfig.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		LoadConfig.BorderSizePixel = 0
@@ -5375,15 +5407,15 @@ function NeverLose:CreateWindow(Config)
 		Icon.ZIndex = 153
 		Icon.FontFace = NeverLose.BuiltInBold
 		Icon.Text = "plus-large"
-		Icon.TextColor3 = Color3.fromRGB(223, 223, 223)
+		Icon.TextColor3 = NeverLose.Theme.Muted
 		Icon.TextSize = 16.000
 		Icon.TextTransparency = 0.350
 		Icon.TextWrapped = true
 
-		UICorner_3.CornerRadius = UDim.new(0, 4)
+		UICorner_3.CornerRadius = UDim.new(0, 8)
 		UICorner_3.Parent = LoadConfig
 
-		UICorner_4.CornerRadius = UDim.new(0, 10)
+		UICorner_4.CornerRadius = UDim.new(0, 14)
 		UICorner_4.Parent = InputFrame
 
 		local OpenButton = Instance.new("TextButton")
@@ -5392,7 +5424,7 @@ function NeverLose:CreateWindow(Config)
 		OpenButton.Name = NeverLose.RandomString();
 		OpenButton.Parent = ConfigFrame
 		OpenButton.AnchorPoint = Vector2.new(0, 0.5)
-		OpenButton.BackgroundColor3 = Color3.fromRGB(20, 22, 27)
+		OpenButton.BackgroundColor3 = NeverLose.Theme.Panel
 		OpenButton.BackgroundTransparency = 1.000
 		OpenButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		OpenButton.BorderSizePixel = 0
@@ -5404,7 +5436,7 @@ function NeverLose:CreateWindow(Config)
 		OpenButton.TextColor3 = Color3.fromRGB(0, 0, 0)
 		OpenButton.TextSize = 14.000
 
-		UICorner.CornerRadius = UDim.new(0, 4)
+		UICorner.CornerRadius = UDim.new(0, 8)
 		UICorner.Parent = OpenButton
 
 		ConfigLib.SetRender(false);
@@ -5501,7 +5533,7 @@ function NeverLose:CreateWindow(Config)
 
 				ConfigItemFrame.Name = NeverLose.RandomString();
 				ConfigItemFrame.Parent = ConfigMenu
-				ConfigItemFrame.BackgroundColor3 = Color3.fromRGB(21, 20, 27)
+				ConfigItemFrame.BackgroundColor3 = NeverLose.Theme.Panel
 				ConfigItemFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				ConfigItemFrame.BorderSizePixel = 0
 				ConfigItemFrame.Size = UDim2.new(1, -10, 0, 30)
@@ -5528,7 +5560,7 @@ function NeverLose:CreateWindow(Config)
 
 				DeleteConfig.Name = NeverLose.RandomString();
 				DeleteConfig.Parent = BasedHandler
-				DeleteConfig.BackgroundColor3 = Color3.fromRGB(39, 40, 49)
+				DeleteConfig.BackgroundColor3 = NeverLose.Theme.Hover
 				DeleteConfig.BackgroundTransparency = 1.000
 				DeleteConfig.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				DeleteConfig.BorderSizePixel = 0
@@ -5548,17 +5580,17 @@ function NeverLose:CreateWindow(Config)
 				Icon.ZIndex = 153
 				Icon.FontFace = NeverLose.BuiltInBold
 				Icon.Text = "trash-can"
-				Icon.TextColor3 = Color3.fromRGB(223, 223, 223)
+				Icon.TextColor3 = NeverLose.Theme.Muted
 				Icon.TextSize = 16.000
 				Icon.TextTransparency = 0.400
 				Icon.TextWrapped = true
 
-				UICorner.CornerRadius = UDim.new(0, 4)
+				UICorner.CornerRadius = UDim.new(0, 8)
 				UICorner.Parent = DeleteConfig
 
 				LoadConfig.Name = NeverLose.RandomString();
 				LoadConfig.Parent = BasedHandler
-				LoadConfig.BackgroundColor3 = Color3.fromRGB(39, 40, 49)
+				LoadConfig.BackgroundColor3 = NeverLose.Theme.Hover
 				LoadConfig.BackgroundTransparency = 1.000
 				LoadConfig.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				LoadConfig.BorderSizePixel = 0
@@ -5578,15 +5610,15 @@ function NeverLose:CreateWindow(Config)
 				Icon_2.ZIndex = 153
 				Icon_2.FontFace = NeverLose.BuiltInBold
 				Icon_2.Text = "arrow-right-from-portrait-rectangle"
-				Icon_2.TextColor3 = Color3.fromRGB(223, 223, 223)
+				Icon_2.TextColor3 = NeverLose.Theme.Muted
 				Icon_2.TextSize = 16.000
 				Icon_2.TextTransparency = 0.400
 				Icon_2.TextWrapped = true
 
-				UICorner_2.CornerRadius = UDim.new(0, 4)
+				UICorner_2.CornerRadius = UDim.new(0, 8)
 				UICorner_2.Parent = LoadConfig
 
-				UICorner_3.CornerRadius = UDim.new(0, 5)
+				UICorner_3.CornerRadius = UDim.new(0, 14)
 				UICorner_3.Parent = ConfigItemFrame
 
 				BasedLabel.Name = NeverLose.RandomString();
@@ -5600,13 +5632,13 @@ function NeverLose:CreateWindow(Config)
 				BasedLabel.ZIndex = 153
 				BasedLabel.Font = Enum.Font.GothamMedium
 				BasedLabel.Text = ConfigNameStr
-				BasedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				BasedLabel.TextColor3 = NeverLose.Theme.Text
 				BasedLabel.TextSize = 13.000
 				BasedLabel.TextTransparency = 0
 				BasedLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 				UIStroke.Transparency = 0.500
-				UIStroke.Color = Color3.fromRGB(45, 48, 58)
+				UIStroke.Color = NeverLose.Theme.Border
 				UIStroke.Parent = ConfigItemFrame
 
 				local Render = LPH_NO_VIRTUALIZE(function(rst)
@@ -5711,7 +5743,7 @@ function NeverLose:CreateWindow(Config)
 				table.insert(ConfigLib.Signals , deleter.MouseLeave:Connect(LPH_NO_VIRTUALIZE(function()
 					NeverLose.PlayAnimate(Icon,SlowyTween,{
 						TextTransparency = 0.400,
-						TextColor3 = Color3.fromRGB(223, 223, 223)
+						TextColor3 = NeverLose.Theme.Muted
 					})
 				end)))
 
@@ -5725,7 +5757,7 @@ function NeverLose:CreateWindow(Config)
 				table.insert(ConfigLib.Signals , LoadConfig.MouseLeave:Connect(LPH_NO_VIRTUALIZE(function()
 					NeverLose.PlayAnimate(Icon_2,SlowyTween,{
 						TextTransparency = 0.400,
-						TextColor3 = Color3.fromRGB(223, 223, 223)
+						TextColor3 = NeverLose.Theme.Muted
 					})
 				end)))
 			end;
@@ -5909,7 +5941,7 @@ function NeverLose:CreateWindow(Config)
 		Watermark.Name = NeverLose.RandomString();
 		Watermark.Parent = NeverLose.ScreenGui
 		Watermark.AnchorPoint = Vector2.new(1, 0)
-		Watermark.BackgroundColor3 = Color3.fromRGB(4, 4, 4)
+		Watermark.BackgroundColor3 = NeverLose.Theme.Base
 		Watermark.BackgroundTransparency = 0
 		Watermark.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Watermark.BorderSizePixel = 0
@@ -6008,7 +6040,7 @@ function NeverLose:CreateWindow(Config)
 			Content.ZIndex = 17
 			Content.Font = Enum.Font.GothamBold
 			Content.Text = Name
-			Content.TextColor3 = Color3.fromRGB(186, 186, 186)
+			Content.TextColor3 = NeverLose.Theme.Muted
 			Content.TextSize = 15.000
 			Content.TextTransparency = 0
 			Content.TextXAlignment = Enum.TextXAlignment.Left
@@ -6165,8 +6197,8 @@ function NeverLose:CreateNotification()
 		NotifyFrame.Name = NeverLose.RandomString();
 		NotifyFrame.Parent = ContainerFrame
 		NotifyFrame.AnchorPoint = Vector2.new(1, 0)
-		NotifyFrame.BackgroundColor3 = Color3.fromRGB(20, 22, 27)
-		NotifyFrame.BackgroundTransparency = 0.075
+		NotifyFrame.BackgroundColor3 = NeverLose.Theme.Panel
+		NotifyFrame.BackgroundTransparency = 0.12
 		NotifyFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		NotifyFrame.BorderSizePixel = 0
 		NotifyFrame.ClipsDescendants = true
@@ -6174,11 +6206,12 @@ function NeverLose:CreateNotification()
 		NotifyFrame.Size = UDim2.new(0, 220, 0, 55)
 		NotifyFrame.ZIndex = 130
 
-		UICorner.CornerRadius = UDim.new(0, 10)
+		UICorner.CornerRadius = UDim.new(0, 14)
 		UICorner.Parent = NotifyFrame
+		NeverLose:AddGlassGradient(NotifyFrame, 120);
 
 		UIStroke.Transparency = 0.650
-		UIStroke.Color = Color3.fromRGB(45, 48, 58)
+		UIStroke.Color = NeverLose.Theme.Border
 		UIStroke.Parent = NotifyFrame
 
 		LogoImage.Name = NeverLose.RandomString();
@@ -6194,7 +6227,7 @@ function NeverLose:CreateNotification()
 		LogoImage.Image = Config.Logo
 		LogoImage.ImageColor3 = NeverLose.IconColor;
 
-		UICorner_2.CornerRadius = UDim.new(0, 7)
+		UICorner_2.CornerRadius = UDim.new(0, 18)
 		UICorner_2.Parent = LogoImage
 
 		NotifyName.Name = NeverLose.RandomString();
@@ -6208,7 +6241,7 @@ function NeverLose:CreateNotification()
 		NotifyName.ZIndex = 132
 		NotifyName.Font = Enum.Font.GothamBold
 		NotifyName.Text = Config.Title
-		NotifyName.TextColor3 = Color3.fromRGB(255, 255, 255)
+		NotifyName.TextColor3 = NeverLose.Theme.Text
 		NotifyName.TextSize = 17.000
 		NotifyName.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -6223,7 +6256,7 @@ function NeverLose:CreateNotification()
 		NotifyContent.ZIndex = 132
 		NotifyContent.Font = Enum.Font.GothamBold
 		NotifyContent.Text = Config.Content
-		NotifyContent.TextColor3 = Color3.fromRGB(255, 255, 255)
+		NotifyContent.TextColor3 = NeverLose.Theme.Text
 		NotifyContent.TextSize = 12.000
 		NotifyContent.TextTransparency = 0.650
 		NotifyContent.TextXAlignment = Enum.TextXAlignment.Left
@@ -6328,7 +6361,7 @@ function NeverLose:CreateLogger()
 		LogFrame.Name = NeverLose.RandomString();
 		LogFrame.Parent = Log
 		LogFrame.AnchorPoint = Vector2.new(0.5, 0)
-		LogFrame.BackgroundColor3 = Color3.fromRGB(20, 22, 27)
+		LogFrame.BackgroundColor3 = NeverLose.Theme.Panel
 		LogFrame.BackgroundTransparency =  1--0.075
 		LogFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		LogFrame.BorderSizePixel = 0
@@ -6337,11 +6370,12 @@ function NeverLose:CreateLogger()
 		LogFrame.Size = UDim2.new(0, 0, 0, 20)
 		LogFrame.ZIndex = 130
 
-		UICorner.CornerRadius = UDim.new(0, 4)
+		UICorner.CornerRadius = UDim.new(0, 8)
 		UICorner.Parent = LogFrame
+		NeverLose:AddGlassGradient(LogFrame, 120);
 
 		UIStroke.Transparency = 1--0.650
-		UIStroke.Color = Color3.fromRGB(45, 48, 58)
+		UIStroke.Color = NeverLose.Theme.Border
 		UIStroke.Parent = LogFrame
 
 		LogContent.Name = NeverLose.RandomString();
@@ -6355,7 +6389,7 @@ function NeverLose:CreateLogger()
 		LogContent.ZIndex = 132
 		LogContent.Font = Enum.Font.GothamBold
 		LogContent.Text = Message
-		LogContent.TextColor3 = Color3.fromRGB(255, 255, 255)
+		LogContent.TextColor3 = NeverLose.Theme.Text
 		LogContent.TextSize = 12.000
 		LogContent.TextTransparency = 1--0.250
 		LogContent.TextXAlignment = Enum.TextXAlignment.Left
@@ -6371,7 +6405,7 @@ function NeverLose:CreateLogger()
 		Line.Size = UDim2.new(0, 5, 1, 0)
 		Line.ZIndex = 131
 
-		UICorner_2.CornerRadius = UDim.new(0, 4)
+		UICorner_2.CornerRadius = UDim.new(0, 8)
 		UICorner_2.Parent = Line
 
 		Icon.Name = NeverLose.RandomString();
@@ -6385,7 +6419,7 @@ function NeverLose:CreateLogger()
 		Icon.ZIndex = 133
 		Icon.FontFace = NeverLose.BuiltInBold
 		Icon.Text = IconStr
-		Icon.TextColor3 = Color3.fromRGB(223, 223, 223)
+		Icon.TextColor3 = NeverLose.Theme.Muted
 		Icon.TextSize = 13.000
 		Icon.TextTransparency = 1--0.250
 		Icon.TextWrapped = true
@@ -6394,7 +6428,7 @@ function NeverLose:CreateLogger()
 
 		NeverLose.PlayAnimate(LogFrame , SlowyTween , {
 			Size = UDim2.new(0, size.X + 35, 0, 20),
-			BackgroundTransparency =  0.075
+			BackgroundTransparency = 0.12
 		});
 
 		task.delay(0.15,LPH_NO_VIRTUALIZE(function()
@@ -6500,7 +6534,7 @@ function NeverLose:CreateIndicator()
 		local Shadow = NeverLose:CreateShadow(IndicatorItem);
 
 		IndicatorItem.Name = NeverLose.RandomString();
-		IndicatorItem.BackgroundColor3 = Color3.fromRGB(8, 8, 13)
+		IndicatorItem.BackgroundColor3 = NeverLose.Theme.Base
 		IndicatorItem.BackgroundTransparency = 1
 		IndicatorItem.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		IndicatorItem.BorderSizePixel = 0
@@ -6519,8 +6553,9 @@ function NeverLose:CreateIndicator()
 			end;
 		end))
 
-		UICorner.CornerRadius = UDim.new(0, 25)
-		UICorner.Parent = IndicatorItem
+	UICorner.CornerRadius = UDim.new(0, 25)
+	UICorner.Parent = IndicatorItem
+	NeverLose:AddGlassGradient(IndicatorItem, 105);
 
 		Line.Name = NeverLose.RandomString();
 		Line.Parent = IndicatorItem
@@ -6552,7 +6587,7 @@ function NeverLose:CreateIndicator()
 		Icon.ZIndex = 17
 		Icon.FontFace = NeverLose.BuiltInBold;
 		Icon.Text = Config.Icon
-		Icon.TextColor3 = Color3.fromRGB(186, 186, 186)
+		Icon.TextColor3 = NeverLose.Theme.Muted
 		Icon.TextSize = 21.000
 		Icon.TextTransparency = 1
 		Icon.TextWrapped = true
@@ -6569,7 +6604,7 @@ function NeverLose:CreateIndicator()
 		Content.ZIndex = 17
 		Content.Font = Enum.Font.GothamBold
 		Content.Text = Config.Name
-		Content.TextColor3 = Color3.fromRGB(186, 186, 186)
+		Content.TextColor3 = NeverLose.Theme.Muted
 		Content.TextSize = 20.000
 		Content.TextTransparency = 1
 		Content.TextXAlignment = Enum.TextXAlignment.Left
@@ -6587,7 +6622,7 @@ function NeverLose:CreateIndicator()
 
 			if value then
 				NeverLose.PlayAnimate(IndicatorItem , SlowyTween , {
-					BackgroundTransparency = 0.200
+					BackgroundTransparency = 0.12
 				});
 
 				NeverLose.PlayAnimate(Line , SlowyTween , {
