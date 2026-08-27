@@ -5953,7 +5953,7 @@ function NeverLose:CreateWindow(Config)
 		Watermark.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Watermark.BorderSizePixel = 0
 		Watermark.ClipsDescendants = true
-		Watermark.Position = UDim2.fromOffset(12, 12)
+		Watermark.Position = UDim2.fromOffset(12, 60)
 		Watermark.Size = UDim2.fromOffset(224, 32)
 		Watermark.ZIndex = 16
 
