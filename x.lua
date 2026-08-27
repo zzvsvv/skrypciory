@@ -5057,14 +5057,14 @@ function NeverLose:CreateWindow(Config)
 			SectionLabel.BackgroundTransparency = 1.000
 			SectionLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
 			SectionLabel.BorderSizePixel = 0
-			SectionLabel.Position = UDim2.new(0.5, 0, 0, 0)
-			SectionLabel.Size = UDim2.new(1, -35, 0, 15)
+			SectionLabel.Position = UDim2.new(0.5, 0, 0, 4)
+			SectionLabel.Size = UDim2.new(1, -30, 0, 17)
 			SectionLabel.ZIndex = 9
 			SectionLabel.Font = Enum.Font.BuilderSans
 			SectionLabel.Text = Config.Name
 			SectionLabel.TextColor3 = NeverLose.Theme.Text
-			SectionLabel.TextSize = 11.000
-			SectionLabel.TextTransparency = 0.500
+			SectionLabel.TextSize = 12.000
+			SectionLabel.TextTransparency = 0.400
 			SectionLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 			SectionHandler.Name = NeverLose.RandomString();
@@ -5075,8 +5075,8 @@ function NeverLose:CreateWindow(Config)
 			SectionHandler.BorderColor3 = Color3.fromRGB(0, 0, 0)
 			SectionHandler.BorderSizePixel = 0
 			SectionHandler.ClipsDescendants = true
-			SectionHandler.Position = UDim2.new(0.5, 0, 0, 20)
-			SectionHandler.Size = UDim2.new(1, -10, 1, -21)
+			SectionHandler.Position = UDim2.new(0.5, 0, 0, 26)
+			SectionHandler.Size = UDim2.new(1, -10, 1, -27)
 			SectionHandler.ZIndex = 9
 
 			UIStroke.Transparency = 0.650
@@ -5100,7 +5100,7 @@ function NeverLose:CreateWindow(Config)
 					})
 				else
 					NeverLose.PlayAnimate(SectionFrame , VSlowTween , {
-						Size = UDim2.new(1, -5, 0, UIListLayout.AbsoluteContentSize.Y + 19.5)
+						Size = UDim2.new(1, -5, 0, UIListLayout.AbsoluteContentSize.Y + 25.5)
 					})
 				end;
 			end));
@@ -5110,7 +5110,7 @@ function NeverLose:CreateWindow(Config)
 			Section.SetRender = LPH_NO_VIRTUALIZE(function(value)
 				if value then
 					NeverLose.PlayAnimate(SectionLabel,SlowyTween,{
-						TextTransparency = 0.500
+						TextTransparency = 0.400
 					})
 
 					NeverLose.PlayAnimate(SectionHandler,SlowyTween,{
