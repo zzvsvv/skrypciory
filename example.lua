@@ -1,8 +1,8 @@
-local Library = loadstring(game:HttpGet(
-	"https://raw.githubusercontent.com/zzvsvv/skrypciory/refs/heads/main/x.lua"
-))()
+local LibraryUrl = "https://raw.githubusercontent.com/zzvsvv/skrypciory/refs/heads/main/x.lua"
+local Library = loadstring(game:HttpGet(LibraryUrl .. "?cache=" .. tostring(os.time())))()
 
 Library.UnloadEnabled = true
+Library:SetAccentColor(Color3.fromRGB(242, 157, 198))
 
 local Window = Library:CreateWindow({
 	Name = "Astra",

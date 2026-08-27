@@ -178,6 +178,7 @@ GlobalWindow.Name = NeverLose.RandomString();
 GlobalWindow.IgnoreGuiInset = true;
 GlobalWindow.ZIndexBehavior = Enum.ZIndexBehavior.Global;
 GlobalWindow.ResetOnSpawn = false;
+GlobalWindow.DisplayOrder = 100;
 GlobalWindow.Parent = CoreGui;
 
 NeverLose.Scales = {
@@ -189,18 +190,18 @@ NeverLose.Scales = {
 
 -- Blush-glass palette built around #f29dc6.
 NeverLose.Theme = {
-	Base = Color3.fromRGB(24, 18, 27),
-	Panel = Color3.fromRGB(35, 25, 39),
-	Elevated = Color3.fromRGB(48, 33, 52),
-	Control = Color3.fromRGB(59, 40, 62),
-	Hover = Color3.fromRGB(79, 52, 76),
-	Active = Color3.fromRGB(102, 66, 92),
-	Track = Color3.fromRGB(20, 14, 23),
-	Border = Color3.fromRGB(218, 148, 181),
+	Base = Color3.fromRGB(42, 23, 35),
+	Panel = Color3.fromRGB(58, 32, 48),
+	Elevated = Color3.fromRGB(75, 41, 61),
+	Control = Color3.fromRGB(90, 50, 73),
+	Hover = Color3.fromRGB(113, 64, 91),
+	Active = Color3.fromRGB(138, 79, 110),
+	Track = Color3.fromRGB(33, 18, 27),
+	Border = Color3.fromRGB(205, 118, 161),
 	Text = Color3.fromRGB(255, 246, 251),
-	Muted = Color3.fromRGB(206, 180, 194),
+	Muted = Color3.fromRGB(226, 190, 208),
 	Accent = Color3.fromRGB(242, 157, 198),
-	AccentSoft = Color3.fromRGB(216, 126, 185),
+	AccentSoft = Color3.fromRGB(222, 126, 173),
 };
 
 NeverLose.IconColor = NeverLose.Theme.Text;
@@ -1051,6 +1052,23 @@ end);
 NeverLose.EnabledBlur = true;
 NeverLose.BlurModuleParent = workspace.CurrentCamera;
 NeverLose.BlurCleanups = {};
+NeverLose.BlurInstances = {};
+
+local SharedEnvironment = getgenv();
+local SharedBlurRegistryKey = "__NeverLoseGlassBlurInstances";
+local SharedBlurRegistry = SharedEnvironment[SharedBlurRegistryKey];
+if type(SharedBlurRegistry) ~= "table" then
+	SharedBlurRegistry = {};
+	SharedEnvironment[SharedBlurRegistryKey] = SharedBlurRegistry;
+end;
+
+-- Clear blur objects left by an interrupted or re-executed copy of the library.
+for BlurInstance in next, SharedBlurRegistry do
+	pcall(function()
+		BlurInstance:Destroy();
+	end);
+	SharedBlurRegistry[BlurInstance] = nil;
+end;
 
 NeverLose.GetCalculatePosition = LPH_NO_VIRTUALIZE(function(planePos, planeNormal, rayOrigin, rayDirection)
 	local n = planeNormal;
@@ -1096,6 +1114,10 @@ NeverLose.CreateBlurModule = LPH_NO_VIRTUALIZE(function(self , Frame , Signal)
 
 	Part.Name = NeverLose.RandomString();
 	Part:SetAttribute("NeverLoseBlur", NeverLose.ScreenGui.Name);
+	NeverLose.BlurInstances[Part] = true;
+	NeverLose.BlurInstances[DepthOfField] = true;
+	SharedBlurRegistry[Part] = true;
+	SharedBlurRegistry[DepthOfField] = true;
 
 	local disconnect;
 	local renderConnection;
@@ -1176,8 +1198,12 @@ NeverLose.CreateBlurModule = LPH_NO_VIRTUALIZE(function(self , Frame , Signal)
 		DepthOfField.NearIntensity = 0;
 		DepthOfField.Enabled = false;
 		Part.Parent = nil;
-		Part:Destroy();
-		DepthOfField:Destroy();
+		pcall(function() Part:Destroy(); end);
+		pcall(function() DepthOfField:Destroy(); end);
+		NeverLose.BlurInstances[Part] = nil;
+		NeverLose.BlurInstances[DepthOfField] = nil;
+		SharedBlurRegistry[Part] = nil;
+		SharedBlurRegistry[DepthOfField] = nil;
 	end;
 
 	table.insert(NeverLose.BlurCleanups, disconnect);
@@ -5985,16 +6011,6 @@ function NeverLose:CreateWindow(Config)
 		end;
 		UpdateWatermarkSize();
 
-		Watermark:GetPropertyChangedSignal('BackgroundTransparency'):Connect(LPH_NO_VIRTUALIZE(function()
-			if Watermark.BackgroundTransparency > 0.9 then
-				Watermark.Visible = false;
-				Watermark.Parent = nil;
-			else
-				Watermark.Parent = NeverLose.ScreenGui
-				Watermark.Visible = true;
-			end;
-		end));
-
 		NeverLose.__WatermarkCache = Watermark_lb;
 		Shadow:Render(true);
 		Watermark_lb.Status = true;
@@ -6025,9 +6041,10 @@ function NeverLose:CreateWindow(Config)
 		end));
 
 		function Watermark_lb:SetRender(value)
-			Watermark_lb.Status = value;
+			Watermark_lb.Status = value == true;
 
-			if value then
+			if Watermark_lb.Status then
+				Watermark.Visible = true;
 				NeverLose.PlayAnimate(Watermark,SlowyTween , {
 					BackgroundTransparency = 0.35
 				})
@@ -6045,6 +6062,11 @@ function NeverLose:CreateWindow(Config)
 				NeverLose.PlayAnimate(NameLabel, SlowyTween, { TextTransparency = 1 });
 				NeverLose.PlayAnimate(MetricsLabel, SlowyTween, { TextTransparency = 1 });
 				Shadow:Render(false);
+				task.delay(0.24, function()
+					if not Watermark_lb.Status and Watermark.Parent then
+						Watermark.Visible = false;
+					end;
+				end);
 			end
 		end;
 
@@ -6584,6 +6606,14 @@ function NeverLose:Unload()
 	end;
 	table.clear(NeverLose.BlurCleanups);
 
+	for BlurInstance in next, NeverLose.BlurInstances do
+		pcall(function()
+			BlurInstance:Destroy();
+		end);
+		NeverLose.BlurInstances[BlurInstance] = nil;
+		SharedBlurRegistry[BlurInstance] = nil;
+	end;
+
 	for i,v in next , NeverLose.GlobalSignals do
 		pcall(v.Disconnect,v)
 	end;
@@ -6593,7 +6623,7 @@ function NeverLose:Unload()
 	local BlurTag = NeverLose.ScreenGui.Name;
 	for _, Container in next, { cloneref(game:GetService("Lighting")), workspace.CurrentCamera } do
 		if Container then
-			for _, Item in next, Container:GetChildren() do
+			for _, Item in next, Container:GetDescendants() do
 				if Item:GetAttribute("NeverLoseBlur") == BlurTag then
 					Item:Destroy();
 				end;
