@@ -3891,6 +3891,7 @@ function NeverLose:CreateWindow(Config)
 		Content = "Counter-Strike 2",
 		Size = UDim2.new(0, 640, 0, 480),
 		ConfigFolder = "NeverLoseConfigs",
+		ShowConfigHeader = true,
 		Enable3DRenderer = false,
 		Keybind = "Insert"
 	});
@@ -3904,6 +3905,7 @@ function NeverLose:CreateWindow(Config)
 		Tabs = {},
 		CurrentTab = 1,
 		Keybind = Config.Keybind,
+		ShowConfigHeader = Config.ShowConfigHeader,
 		Enable3DRenderer = Config.Enable3DRenderer
 	};
 
@@ -4452,6 +4454,7 @@ function NeverLose:CreateWindow(Config)
 	ConfigFrame.Position = UDim2.new(0, 10, 0.5, 0)
 	ConfigFrame.Size = UDim2.new(0, 115, 0, 30)
 	ConfigFrame.ZIndex = 9
+	ConfigFrame.Visible = Window.ShowConfigHeader
 
 	UIStroke_2.Transparency = 0.650
 	UIStroke_2.Color = NeverLose.Theme.Border
@@ -5496,6 +5499,82 @@ function NeverLose:CreateWindow(Config)
 			end;
 		end;
 
+		function ConfigLib:_NormalizeName(name)
+			name = tostring(name or ""):match("^%s*(.-)%s*$");
+			if name == "" or name:find('/', 1, true) or name:find('\\', 1, true) then
+				return nil;
+			end;
+			return string.sub(name, 1, 24);
+		end;
+
+		function ConfigLib:GetConfigs()
+			if not isfolder(Window.ConfigFolder) then
+				makefolder(Window.ConfigFolder);
+			end;
+
+			local configs = {};
+			for _, path in next, listfiles(Window.ConfigFolder) do
+				local name = path:gsub("\\", "/"):match("([^/]+)$");
+				if name and name ~= "" then
+					table.insert(configs, name);
+				end;
+			end;
+			table.sort(configs);
+			return configs;
+		end;
+
+		function ConfigLib:GetSelected()
+			return self.SelectedConfig or "Default";
+		end;
+
+		function ConfigLib:SetSelected(name)
+			name = self:_NormalizeName(name);
+			if not name then return false; end;
+			self.SelectedConfig = name;
+			ConfigName.Text = name;
+			UpdateSize();
+			return true;
+		end;
+
+		function ConfigLib:Save(name)
+			name = self:_NormalizeName(name or self.SelectedConfig or "Default");
+			if not name then return false; end;
+			local success = pcall(function()
+				writefile(Window.ConfigFolder..'/'..name, self:GetData());
+			end);
+			if not success then return false; end;
+			self:SetSelected(name);
+			self:RefreshConfig();
+			Logging.new("folder", 'Saved '..tostring(name), 3.5);
+			return true;
+		end;
+
+		function ConfigLib:Load(name)
+			name = self:_NormalizeName(name or self.SelectedConfig or "Default");
+			if not name then return false; end;
+			local path = Window.ConfigFolder..'/'..name;
+			if not isfile(path) then return false; end;
+			local success = pcall(function() self:LoadData(readfile(path)); end);
+			if not success then return false; end;
+			self:SetSelected(name);
+			self:RefreshConfig();
+			Logging.new("folder", 'Loaded '..tostring(name), 3.5);
+			return true;
+		end;
+
+		function ConfigLib:Delete(name)
+			name = self:_NormalizeName(name or self.SelectedConfig or "Default");
+			if not name then return false; end;
+			local path = Window.ConfigFolder..'/'..name;
+			if not isfile(path) then return false; end;
+			local success = pcall(function() delfile(path); end);
+			if not success then return false; end;
+			if self.SelectedConfig == name then self:SetSelected("Default"); end;
+			self:RefreshConfig();
+			Logging.new("trash-can", 'Deleted '..tostring(name), 3.5);
+			return true;
+		end;
+
 		function ConfigLib:RefreshConfig()
 			if not isfolder(Window.ConfigFolder) then
 				makefolder(Window.ConfigFolder);
@@ -5851,7 +5930,7 @@ function NeverLose:CreateWindow(Config)
 		return ConfigLib;
 	end;
 
-	Window:_InitConfig();
+	Window.Config = Window:_InitConfig();
 
 	local UserSettings = NeverLose:CreateOptionWindow(BottomFrame , BottomFrame.ZIndex + 13);
 	local reciveSignal;
