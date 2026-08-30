@@ -1041,7 +1041,11 @@ NeverLose.ProcessParams = LPH_NO_VIRTUALIZE(function(self , Params , Fixed)
 	local k = Params or {};
 
 	for i,v in next , Fixed do
-		k[i] = Params[i] or v;
+		if Params[i] == nil then
+			k[i] = v;
+		else
+			k[i] = Params[i];
+		end;
 	end;
 
 	table.clear(Fixed);
@@ -4455,6 +4459,7 @@ function NeverLose:CreateWindow(Config)
 	ConfigFrame.Size = UDim2.new(0, 115, 0, 30)
 	ConfigFrame.ZIndex = 9
 	ConfigFrame.Visible = Window.ShowConfigHeader
+	if not Window.ShowConfigHeader then ConfigFrame.Parent = nil end
 
 	UIStroke_2.Transparency = 0.650
 	UIStroke_2.Color = NeverLose.Theme.Border
