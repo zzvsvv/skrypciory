@@ -4785,8 +4785,10 @@ function NeverLose:CreateWindow(Config)
 		Config = NeverLose:ProcessParams(Config , {
 			Icon = "crosshairs",
 			Name = "Tab",
-			Type = "Double"
+			Type = "Double",
+			Parent = LeftScrollingFrame
 		});
+		local HasIcon = type(Config.Icon) == "string" and Config.Icon ~= "";
 
 		local Tab = {
 			Signal = NeverLose:CreateSignal(false);
@@ -4796,11 +4798,12 @@ function NeverLose:CreateWindow(Config)
 		local UICorner = Instance.new("UICorner")
 		local TabIcon = Instance.new("TextLabel")
 		local TabContentLabel = Instance.new("TextLabel")
+		local TabHeaderLabel = Instance.new("TextLabel")
 
 		Tab.Idx = TabButton;
 
 		TabButton.Name = NeverLose.RandomString();
-		TabButton.Parent = LeftScrollingFrame
+		TabButton.Parent = Config.Parent
 		TabButton.BackgroundColor3 = NeverLose.Theme.Active
 		TabButton.BackgroundTransparency = 0.500
 		TabButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
@@ -4826,6 +4829,7 @@ function NeverLose:CreateWindow(Config)
 		TabIcon.TextColor3 = NeverLose.AccentColor
 		TabIcon.TextSize = 14.000
 		TabIcon.TextWrapped = true
+		TabIcon.Visible = HasIcon
 
 		TabContentLabel.Name = NeverLose.RandomString();
 		TabContentLabel.Parent = TabButton
@@ -4834,14 +4838,29 @@ function NeverLose:CreateWindow(Config)
 		TabContentLabel.BackgroundTransparency = 1.000
 		TabContentLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		TabContentLabel.BorderSizePixel = 0
-		TabContentLabel.Position = UDim2.new(0, 30, 0.5, 0)
-		TabContentLabel.Size = UDim2.new(1, -7, 0, 15)
+		TabContentLabel.Position = UDim2.new(0, HasIcon and 30 or 12, 0.5, 0)
+		TabContentLabel.Size = UDim2.new(1, HasIcon and -37 or -19, 0, 15)
 		TabContentLabel.ZIndex = 9
 		TabContentLabel.Font = Enum.Font.BuilderSans
 		TabContentLabel.Text = Config.Name
 		TabContentLabel.TextColor3 = NeverLose.Theme.Text
 		TabContentLabel.TextSize = 12.000
 		TabContentLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+		TabHeaderLabel.Name = NeverLose.RandomString();
+		TabHeaderLabel.Parent = RightHeader
+		TabHeaderLabel.AnchorPoint = Vector2.new(0, 0.5)
+		TabHeaderLabel.BackgroundTransparency = 1
+		TabHeaderLabel.BorderSizePixel = 0
+		TabHeaderLabel.Position = UDim2.new(0, Window.ShowConfigHeader and 140 or 14, 0.5, 0)
+		TabHeaderLabel.Size = UDim2.new(1, Window.ShowConfigHeader and -190 or -64, 0, 22)
+		TabHeaderLabel.ZIndex = 10
+		TabHeaderLabel.Font = Enum.Font.BuilderSansMedium
+		TabHeaderLabel.Text = Config.Name
+		TabHeaderLabel.TextColor3 = NeverLose.Theme.Text
+		TabHeaderLabel.TextSize = 14
+		TabHeaderLabel.TextTransparency = 1
+		TabHeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 		local TabFrame = Instance.new("Frame")
 		local LeftScroll = Instance.new("ScrollingFrame")
@@ -4950,6 +4969,10 @@ function NeverLose:CreateWindow(Config)
 				NeverLose.PlayAnimate(TabContentLabel , SlowyTween , {
 					TextTransparency = 0
 				})
+
+				NeverLose.PlayAnimate(TabHeaderLabel , SlowyTween , {
+					TextTransparency = 0.08
+				})
 			else
 				TabFrame.Position = UDim2.new(0.5, 0, 0.5, 7);
 				TabScale.Scale = 0.985;
@@ -4964,6 +4987,10 @@ function NeverLose:CreateWindow(Config)
 
 				NeverLose.PlayAnimate(TabContentLabel , SlowyTween , {
 					TextTransparency = 0.5
+				})
+
+				NeverLose.PlayAnimate(TabHeaderLabel , SlowyTween , {
+					TextTransparency = 1
 				})
 			end;
 		end);
@@ -5150,6 +5177,84 @@ function NeverLose:CreateWindow(Config)
 		end;
 
 		return Tab;
+	end;
+
+	function Window:AddCategory(Config)
+		if type(Config) == "string" then Config = { Name = Config } end
+		Config = NeverLose:ProcessParams(Config, { Name = "CATEGORY" });
+
+		local Category = {};
+		local CategoryFrame = Instance.new("Frame")
+		local CategoryLabel = Instance.new("TextLabel")
+		local CategoryLayout = Instance.new("UIListLayout")
+
+		CategoryFrame.Name = NeverLose.RandomString();
+		CategoryFrame.Parent = LeftScrollingFrame
+		CategoryFrame.BackgroundTransparency = 1
+		CategoryFrame.BorderSizePixel = 0
+		CategoryFrame.ClipsDescendants = true
+		CategoryFrame.Size = UDim2.new(1, -2, 0, 18)
+
+		CategoryLayout.Parent = CategoryFrame
+		CategoryLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		CategoryLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		CategoryLayout.Padding = UDim.new(0, 4)
+
+		CategoryLabel.Name = NeverLose.RandomString();
+		CategoryLabel.Parent = CategoryFrame
+		CategoryLabel.BackgroundTransparency = 1
+		CategoryLabel.BorderSizePixel = 0
+		CategoryLabel.LayoutOrder = -1000
+		CategoryLabel.Size = UDim2.new(1, -16, 0, 17)
+		CategoryLabel.ZIndex = 8
+		CategoryLabel.Font = Enum.Font.BuilderSans
+		CategoryLabel.Text = string.upper(Config.Name)
+		CategoryLabel.TextColor3 = NeverLose.Theme.Text
+		CategoryLabel.TextSize = 10
+		CategoryLabel.TextTransparency = 0.56
+		CategoryLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+		local SetCategoryRender = LPH_NO_VIRTUALIZE(function(Value)
+			NeverLose.PlayAnimate(CategoryLabel, SlowyTween, {
+				TextTransparency = Value and 0.56 or 1,
+			});
+		end);
+		SetCategoryRender(Window.Signal:GetValue());
+		NeverLose:AddSignal(Window.Signal:Connect(SetCategoryRender));
+
+		NeverLose:AddSignal(CategoryLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(LPH_NO_VIRTUALIZE(function()
+			CategoryFrame.Size = UDim2.new(1, -2, 0, CategoryLayout.AbsoluteContentSize.Y)
+		end)));
+
+		local function FormatModuleName(Name)
+			return (string.gsub(tostring(Name), "(%a)([%w']*)", function(First, Rest)
+				local Word = First .. Rest;
+				if #Word <= 4 and Word == string.upper(Word) then return Word end
+				return string.upper(First) .. string.lower(Rest);
+			end));
+		end;
+
+		function Category:AddSection(ModuleConfig)
+			ModuleConfig = NeverLose:ProcessParams(ModuleConfig, { Name = "MODULE" });
+			local ModuleTab = Window:AddTab({
+				Name = ModuleConfig.TabName or FormatModuleName(ModuleConfig.Name),
+				Icon = ModuleConfig.Icon or "",
+				Type = "Single",
+				Parent = CategoryFrame,
+			});
+			local Section = ModuleTab:AddSection({
+				Name = ModuleConfig.Name,
+				Position = "left",
+			});
+			Section.Tab = ModuleTab;
+			Section.Category = Category;
+			return Section;
+		end;
+
+		Category.AddTab = Category.AddSection;
+		Category.Frame = CategoryFrame;
+		Category.Name = Config.Name;
+		return Category;
 	end;
 
 	function Window:_InitConfig()
